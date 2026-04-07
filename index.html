@@ -807,7 +807,7 @@
 // ════════════════════════════════════════════════════════════
 //  CONFIG
 // ════════════════════════════════════════════════════════════
-const API = 'https://konekta-api.vercel.app';
+const API = 'https://konekta.srv1424726.hstgr.cloud';
 let token = localStorage.getItem('knk_token');
 let me = JSON.parse(localStorage.getItem('knk_user') || 'null');
 let socket = null;
@@ -919,7 +919,7 @@ function showApp() {
 //  SOCKET.IO
 // ════════════════════════════════════════════════════════════
 function initSocket() {
-  try { socket = io(API, { transports: ['polling'], reconnection: false, timeout: 5000 }); } catch { return; }
+  try { socket = io(API, { transports: ['websocket', 'polling'], reconnectionAttempts: 3, timeout: 5000 }); } catch { return; }
   if (!socket) return;
   socket.on('connect', () => {
     socket.emit('join', me.id);
