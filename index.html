@@ -2168,10 +2168,17 @@ async function toggleVoiceRecording() {
       stream.getTracks().forEach(t => t.stop());
       const blob = new Blob(_audioChunks, { type: 'audio/webm' });
       if (blob.size < 500) return;
-      // Utilise data URL directement (pas d'upload — backend n'accepte que les images)
       const reader = new FileReader();
       reader.onload = async e2 => {
-        await sendTypedMessage('voice', e2.target.result);
+        const base64 = e2.target.result.split(',')[1];
+        try {
+          // Endpoint dédié audio sur le VPS (pas de restriction mime)
+          const up = await apiFetch('/upload/audio', 'POST', { base64, mimeType: 'audio/webm' });
+          if (up && up.url) await sendTypedMessage('voice', up.url);
+        } catch(err) {
+          // Fallback : data URL inline (fonctionne toujours, mais plus lourd en DB)
+          await sendTypedMessage('voice', e2.target.result);
+        }
       };
       reader.readAsDataURL(blob);
     };
