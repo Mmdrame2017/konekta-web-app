@@ -381,6 +381,114 @@
   .tag { padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
   .tag-new { background:rgba(0,168,84,.1); color:var(--green); }
 
+  /* ── CONTEXT MENU ── */
+  .ctx-menu {
+    position:fixed; z-index:1100; background:var(--card); border:1px solid var(--border);
+    border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,.2); padding:6px; min-width:180px;
+    display:none; flex-direction:column; overflow:hidden;
+  }
+  .ctx-menu.show { display:flex; }
+  .ctx-item {
+    display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer;
+    border-radius:10px; font-size:14px; transition:.12s;
+  }
+  .ctx-item:hover { background:var(--bg2); }
+  .ctx-item.danger { color:var(--red); }
+
+  /* ── EMOJI PICKER REACTIONS ── */
+  .emoji-picker {
+    position:fixed; z-index:1200; background:var(--card); border:1px solid var(--border);
+    border-radius:40px; padding:8px 12px; gap:6px;
+    box-shadow:0 8px 24px rgba(0,0,0,.15); align-items:center; display:none;
+  }
+  .emoji-picker.show { display:flex; }
+  .emoji-btn-r { font-size:24px; cursor:pointer; transition:.15s; padding:4px; border-radius:50%; border:none; background:transparent; }
+  .emoji-btn-r:hover { background:var(--bg2); transform:scale(1.25); }
+
+  /* ── REPLY BAR ── */
+  .reply-bar { display:none; padding:8px 14px 4px; background:var(--card); border-top:1px solid var(--border); }
+  .reply-bar.show { display:block; }
+  .reply-bar-inner {
+    background:var(--bg2); border-radius:10px; padding:8px 10px;
+    border-left:3px solid var(--green); font-size:12px; color:var(--text2);
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  .reply-bar-text { flex:1; min-width:0; }
+  .reply-bar-name { font-weight:700; color:var(--green); display:block; margin-bottom:2px; font-size:11px; }
+  .reply-bar-preview { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+  .reply-bar-close { background:none; border:none; color:var(--text2); font-size:18px; cursor:pointer; flex-shrink:0; }
+
+  /* ── QUOTED MSG IN BUBBLE ── */
+  .msg-quote { border-radius:8px; padding:6px 10px; margin-bottom:6px; font-size:12px; border-left:3px solid rgba(255,255,255,.5); background:rgba(0,0,0,.12); }
+  .msg-bubble.recv .msg-quote { background:var(--bg2); border-color:var(--green); }
+  .msg-quote-name { font-weight:700; margin-bottom:2px; font-size:11px; opacity:.9; }
+  .msg-quote-text { opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── IMAGE BUBBLE ── */
+  .msg-img { max-width:220px; max-height:280px; border-radius:10px; cursor:pointer; display:block; object-fit:cover; }
+
+  /* ── VOICE BUBBLE ── */
+  .voice-bubble { display:flex; align-items:center; gap:8px; min-width:170px; }
+  .voice-play {
+    width:34px; height:34px; border-radius:50%; border:none; cursor:pointer; font-size:14px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:.15s;
+  }
+  .msg-bubble.sent .voice-play { background:rgba(255,255,255,.25); color:#fff; }
+  .msg-bubble.recv .voice-play { background:var(--green-light); color:var(--green); }
+  .voice-bars { flex:1; display:flex; align-items:center; gap:2px; height:24px; }
+  .vbar { width:3px; border-radius:2px; background:currentColor; opacity:.4; }
+  .voice-dur { font-size:11px; opacity:.65; }
+
+  /* ── REACTIONS ── */
+  .msg-reactions { display:flex; gap:3px; flex-wrap:wrap; margin-top:4px; }
+  .r-chip {
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:2px 7px; font-size:12px; cursor:pointer; transition:.12s;
+    display:flex; align-items:center; gap:2px;
+  }
+  .r-chip:hover { border-color:var(--green); }
+  .r-chip.mine { background:var(--green-light); border-color:var(--green); }
+
+  /* ── MSG WRAPPER ── */
+  .msg-wrap { display:flex; flex-direction:column; }
+  .msg-wrap.sent { align-items:flex-end; }
+  .msg-wrap.recv { align-items:flex-start; }
+
+  /* ── ATTACH / REC BUTTONS ── */
+  .attach-btn, .rec-btn {
+    width:42px; height:42px; background:var(--bg); border:1.5px solid var(--border);
+    border-radius:50%; color:var(--text2); font-size:16px; cursor:pointer; transition:.2s;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .attach-btn:hover, .rec-btn:hover { background:var(--green-light); border-color:var(--green); color:var(--green); }
+  .rec-btn.recording { background:rgba(227,6,19,.1); border-color:var(--red); color:var(--red); animation:pulse-rec .8s infinite; }
+  @keyframes pulse-rec { 0%,100%{opacity:1}50%{opacity:.5} }
+
+  /* ── READ RECEIPTS ── */
+  .msg-ticks { font-size:11px; margin-left:3px; opacity:.65; }
+  .msg-ticks.read { color:#a8d8ff; opacity:1; }
+
+  /* ── LIGHTBOX ── */
+  .lightbox {
+    position:fixed; inset:0; z-index:2000; background:rgba(0,0,0,.92);
+    display:none; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .lightbox.show { display:flex; }
+  .lightbox img { max-width:95vw; max-height:90vh; border-radius:10px; object-fit:contain; }
+
+  /* ── SEARCH BAR IN CHAT ── */
+  .msg-search-bar {
+    display:none; background:var(--card); border-bottom:1px solid var(--border);
+    padding:8px 14px; gap:8px; align-items:center;
+  }
+  .msg-search-bar.show { display:flex; }
+  .msg-search-bar input {
+    flex:1; background:var(--bg); border:1.5px solid var(--border); border-radius:var(--radius-pill);
+    padding:8px 14px; font-size:14px; color:var(--text); outline:none; font-family:inherit;
+  }
+  .msg-search-bar input:focus { border-color:var(--green); }
+  .search-count-badge { font-size:12px; color:var(--text2); white-space:nowrap; }
+
   /* ── RESPONSIVE MOBILE ── */
   @media (max-width: 640px) {
     /* Sidebar → bottom nav */
@@ -837,6 +945,55 @@
   </div>
 </div>
 
+<!-- Contact Info -->
+<div class="modal-overlay" id="modal-contact">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👤 Contact</h3>
+      <button class="close-btn" onclick="closeModal('modal-contact')">✕</button>
+    </div>
+    <div style="text-align:center;margin-bottom:20px">
+      <div class="chat-avatar" style="width:64px;height:64px;font-size:24px;margin:0 auto 12px" id="ct-avatar">?</div>
+      <div style="font-size:18px;font-weight:700" id="ct-display-name">—</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px" id="ct-phone-display">—</div>
+    </div>
+    <div class="form-group">
+      <label>Nom affiché (votre surnom pour ce contact)</label>
+      <input type="text" id="ct-name-input" placeholder="Ex: Moussa Diallo">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-contact')">Fermer</button>
+      <button class="btn btn-primary" onclick="saveContactName()">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightbox-img" src="" alt="Image">
+</div>
+
+<!-- Context Menu -->
+<div class="ctx-menu" id="ctx-menu">
+  <div class="ctx-item" onclick="ctxReply()">↩️ Répondre</div>
+  <div class="ctx-item" onclick="ctxReact()">😊 Réaction</div>
+  <div class="ctx-item" onclick="ctxCopy()">📋 Copier</div>
+  <div class="ctx-item danger" onclick="ctxDelete()">🗑 Supprimer</div>
+</div>
+
+<!-- Emoji Picker -->
+<div class="emoji-picker" id="emoji-picker">
+  <button class="emoji-btn-r" onclick="addReaction('👍')">👍</button>
+  <button class="emoji-btn-r" onclick="addReaction('❤️')">❤️</button>
+  <button class="emoji-btn-r" onclick="addReaction('😂')">😂</button>
+  <button class="emoji-btn-r" onclick="addReaction('😮')">😮</button>
+  <button class="emoji-btn-r" onclick="addReaction('😢')">😢</button>
+  <button class="emoji-btn-r" onclick="addReaction('🙏')">🙏</button>
+</div>
+
+<!-- Hidden file input for chat image -->
+<input type="file" id="chat-img-input" accept="image/*" style="display:none" onchange="onChatImageSelected(this)">
+
 <!-- Buy Product -->
 <div class="modal-overlay" id="modal-buy-product">
   <div class="modal">
@@ -1214,13 +1371,20 @@ async function loadChats() {
     }
     el.innerHTML = data.map(chat => {
       const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
-      const preview = chat.type === 'payment' ? '💳 Paiement Wave' : (chat.content || '...');
+      const savedName = getContactName(otherId);
+      const serverName = chat.other?.name || chat.other?.phone || null;
+      const displayName = savedName || serverName || (otherId.slice(0,8) + '…');
+      const initials = (displayName||'?').charAt(0).toUpperCase();
+      const previewMap = { payment: '💳 Paiement Wave', image: '📷 Photo', voice: '🎤 Vocal' };
+      const preview = previewMap[chat.type] || (chat.content || '…');
+      const time = chat.created_at ? new Date(chat.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
       return `<div class="chat-item" onclick="openChatById('${otherId}')" data-other="${otherId}">
-        <div class="chat-avatar">${(otherId||'?').charAt(0).toUpperCase()}</div>
+        <div class="chat-avatar">${initials}</div>
         <div class="chat-item-info">
-          <div class="chat-item-name">${otherId.slice(0,8)}...</div>
-          <div class="chat-item-last">${preview.substring(0,40)}</div>
+          <div class="chat-item-name">${escHtml(displayName)}</div>
+          <div class="chat-item-last">${escHtml(preview.substring(0,42))}</div>
         </div>
+        <div style="font-size:11px;color:var(--text2);flex-shrink:0;margin-left:4px">${time}</div>
       </div>`;
     }).join('');
   } catch(e) {}
@@ -1283,34 +1447,57 @@ async function openChatById(userId) {
 function openChat(contact) {
   currentChat = contact;
   document.getElementById('chat-badge').classList.remove('show');
+  _replyTo = null;
 
-  // Mobile: show chat view full screen
   const layout = document.querySelector('.chat-layout');
   if (layout) layout.classList.add('chat-open');
 
-  // Mark active in list
   document.querySelectorAll('.chat-item').forEach(el => {
     el.classList.toggle('active', el.dataset.other === contact.userId);
   });
+
+  const savedName = getContactName(contact.userId);
+  const displayName = savedName || contact.name || contact.userId.slice(0,12);
+  const initials = (displayName||'?').charAt(0).toUpperCase();
+  const safePhone = (contact.phone||'').replace(/'/g, "\\'");
+  const safeName = displayName.replace(/'/g, "\\'");
 
   const view = document.getElementById('chat-view');
   view.innerHTML = `
     <div class="chat-header">
       <button class="back-btn-mobile" onclick="closeChatMobile()" title="Retour">←</button>
-      <div class="chat-avatar" style="width:38px;height:38px;font-size:15px">${(contact.name||'?').charAt(0).toUpperCase()}</div>
+      <div class="chat-avatar" style="width:38px;height:38px;font-size:15px">${initials}</div>
       <div class="chat-header-info">
-        <div class="chat-header-name">${contact.name || contact.userId.slice(0,12)}</div>
-        <div class="chat-header-status" id="chat-status">${contact.phone || ''}</div>
+        <div class="chat-header-name">${escHtml(displayName)}</div>
+        <div class="chat-header-status" id="chat-status">${escHtml(contact.phone || '')}</div>
       </div>
       <div class="chat-header-actions">
+        <button class="icon-btn" onclick="toggleMsgSearch()" title="Rechercher dans la conversation">🔍</button>
+        <button class="icon-btn" onclick="openContactModal('${contact.userId}','${safePhone}','${safeName}')" title="Infos contact">👤</button>
         <button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l'argent">💳</button>
       </div>
     </div>
+    <div class="msg-search-bar" id="msg-search-bar">
+      <input type="text" id="msg-search-input" placeholder="Rechercher dans la conversation..." oninput="filterMessages(this.value)">
+      <span class="search-count-badge" id="search-count-badge"></span>
+      <button onclick="toggleMsgSearch()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
     <div class="messages-area scrollbar-custom" id="messages-area"></div>
     <div class="typing-indicator" id="typing-indicator"></div>
+    <div class="reply-bar" id="reply-bar">
+      <div class="reply-bar-inner">
+        <div class="reply-bar-text">
+          <span class="reply-bar-name" id="reply-bar-name"></span>
+          <span class="reply-bar-preview" id="reply-bar-preview"></span>
+        </div>
+        <button class="reply-bar-close" onclick="clearReply()">✕</button>
+      </div>
+    </div>
     <div class="chat-input-area">
+      <button class="attach-btn" onclick="document.getElementById('chat-img-input').click()" title="Joindre une image">📎</button>
       <textarea class="chat-input scrollbar-custom" id="chat-input" placeholder="Message..." rows="1"
         onkeydown="handleInputKey(event)" oninput="handleTyping()"></textarea>
+      <button class="rec-btn" id="rec-btn" onclick="toggleVoiceRecording()" title="Message vocal">🎤</button>
       <button class="pay-btn" onclick="openPaymentModal()" title="Paiement Wave">💳</button>
       <button class="send-btn" onclick="sendMessage()">➤</button>
     </div>
@@ -1344,20 +1531,19 @@ async function loadMessages(contact) {
 function appendMessage(msg, isHistory=false) {
   const area = document.getElementById('messages-area');
   if (!area) return;
-  // Remove empty placeholder
   if (!isHistory) {
     const ph = area.querySelector('[data-placeholder]');
     if (ph) ph.remove();
   }
   const isSent = (msg.sender_id || msg.senderId) === me.id;
   const time = new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+  const msgId = msg.id || ('local_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
 
-  let html = '';
+  // Payment bubble (unchanged flow)
   if (msg.type === 'payment') {
     const pd = msg.payment_data || msg.paymentData || {};
     const status = pd.status === 'success' ? 'success' : 'pending';
-    const dir = isSent ? 'sent' : 'recv';
-    html = `<div style="align-self:${isSent?'flex-end':'flex-start'}">
+    const html = `<div style="align-self:${isSent?'flex-end':'flex-start'}">
       <div class="msg-payment">
         <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${isSent?'💸 Envoyé':'💰 Reçu'}</div>
         <div class="pay-amount">${(pd.amount||0).toLocaleString()} FCFA</div>
@@ -1366,16 +1552,69 @@ function appendMessage(msg, isHistory=false) {
       </div>
       <div class="msg-time" style="text-align:${isSent?'right':'left'}">${time}</div>
     </div>`;
-  } else {
-    html = `<div class="msg-bubble ${isSent?'sent':'recv'}">
-      ${escHtml(msg.content || '')}
-      <div class="msg-time">${time}</div>
-    </div>`;
+    const w = document.createElement('div');
+    w.innerHTML = html;
+    area.appendChild(w.firstElementChild);
+    if (!isHistory) area.scrollTop = area.scrollHeight;
+    return;
   }
 
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = html;
-  area.appendChild(wrapper.firstElementChild);
+  // Parse reply prefix [REPLY:name|quoted]content
+  let replyHtml = '';
+  let displayContent = msg.content || '';
+  const rm = displayContent.match(/^\[REPLY:([^|]+)\|([^\]]+)\]([\s\S]*)$/);
+  if (rm) {
+    replyHtml = `<div class="msg-quote"><div class="msg-quote-name">${escHtml(rm[1])}</div><div class="msg-quote-text">${escHtml(rm[2])}</div></div>`;
+    displayContent = rm[3].trim();
+  }
+
+  // Build inner content
+  let innerHtml = '';
+  if (msg.type === 'image') {
+    innerHtml = `${replyHtml}<img class="msg-img" src="${escHtml(msg.content||'')}" alt="Photo" onclick="openLightbox('${escHtml(msg.content||'')}')">`;
+  } else if (msg.type === 'voice') {
+    const bars = Array.from({length:18}, (_,i) => {
+      const h = 5 + Math.abs(Math.sin(i * 0.9 + 1.2) * 10 + Math.sin(i*1.7)*5);
+      return `<div class="vbar" style="height:${Math.round(h)}px"></div>`;
+    }).join('');
+    innerHtml = `${replyHtml}<div class="voice-bubble">
+      <button class="voice-play" onclick="playVoice(this,'${escHtml(msg.content||'')}')">▶</button>
+      <div class="voice-bars">${bars}</div>
+      <span class="voice-dur">0:00</span>
+    </div>`;
+  } else {
+    innerHtml = `${replyHtml}${escHtml(displayContent)}`;
+  }
+
+  // Read receipts (sent only)
+  const ticks = isSent ? `<span class="msg-ticks${msg.is_read?' read':''}">✓✓</span>` : '';
+
+  // Reactions
+  const reactions = getReactions(msgId);
+  const reactHtml = buildReactHtml(reactions);
+
+  // Build wrapper
+  const wrapEl = document.createElement('div');
+  wrapEl.className = `msg-wrap ${isSent?'sent':'recv'}`;
+  wrapEl.dataset.msgId = msgId;
+  wrapEl.dataset.msgContent = msg.content || '';
+  wrapEl.dataset.msgType = msg.type || 'text';
+  wrapEl.dataset.isSent = isSent ? '1' : '0';
+
+  const imgPad = msg.type === 'image' ? 'padding:4px' : '';
+  wrapEl.innerHTML = `<div class="msg-bubble ${isSent?'sent':'recv'}" style="${imgPad}">${innerHtml}<div class="msg-time">${time}${ticks}</div></div>${reactHtml}`;
+
+  // Long-press / right-click context menu
+  const bubble = wrapEl.querySelector('.msg-bubble');
+  if (bubble) {
+    let pressTimer;
+    bubble.addEventListener('contextmenu', e => { e.preventDefault(); showCtxMenu(e, wrapEl); });
+    bubble.addEventListener('touchstart', e => { pressTimer = setTimeout(() => showCtxMenu(e.touches[0], wrapEl), 600); }, {passive:true});
+    bubble.addEventListener('touchend', () => clearTimeout(pressTimer));
+    bubble.addEventListener('touchmove', () => clearTimeout(pressTimer));
+  }
+
+  area.appendChild(wrapEl);
   if (!isHistory) area.scrollTop = area.scrollHeight;
 }
 
@@ -1385,14 +1624,19 @@ async function sendMessage() {
   const content = input.value.trim();
   if (!content) return;
   input.value = '';
+  input.style.height = 'auto';
+
+  let finalContent = content;
+  if (_replyTo) {
+    finalContent = `[REPLY:${_replyTo.senderName}|${_replyTo.content.substring(0,80)}]${content}`;
+    clearReply();
+  }
+
   const chatId = getChatId(me.id, currentChat.userId);
-  const msg = {
-    chatId, receiverId: currentChat.userId, type: 'text', content,
-    senderId: me.id, createdAt: new Date().toISOString()
-  };
+  const msg = { chatId, receiverId: currentChat.userId, type: 'text', content: finalContent, senderId: me.id, createdAt: new Date().toISOString() };
   appendMessage({ ...msg, sender_id: me.id, created_at: msg.createdAt }, false);
   try {
-    await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type: 'text', content });
+    await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type: 'text', content: finalContent });
     if (socket) socket.emit('sendMessage', { ...msg, receiverId: currentChat.userId });
     loadChats();
   } catch(e) {}
@@ -1845,6 +2089,300 @@ document.addEventListener('keydown', e => {
     else if (document.getElementById('step-otp').style.display !== 'none') verifyOtp();
   }
 });
+
+// ════════════════════════════════════════════════════════════
+//  CONTACTS (localStorage)
+// ════════════════════════════════════════════════════════════
+let _ctUserId = null;
+
+function getContactName(userId) {
+  try { return (JSON.parse(localStorage.getItem('knk_contacts') || '{}')||{})[userId] || null; } catch { return null; }
+}
+
+function openContactModal(userId, phone, currentDisplayName) {
+  _ctUserId = userId;
+  const saved = getContactName(userId);
+  document.getElementById('ct-avatar').textContent = (currentDisplayName||'?').charAt(0).toUpperCase();
+  document.getElementById('ct-display-name').textContent = currentDisplayName || userId.slice(0,12);
+  document.getElementById('ct-phone-display').textContent = phone || '—';
+  document.getElementById('ct-name-input').value = saved || '';
+  openModal('modal-contact');
+}
+
+function saveContactName() {
+  if (!_ctUserId) return;
+  const name = document.getElementById('ct-name-input').value.trim();
+  try {
+    const contacts = JSON.parse(localStorage.getItem('knk_contacts') || '{}');
+    if (name) contacts[_ctUserId] = name; else delete contacts[_ctUserId];
+    localStorage.setItem('knk_contacts', JSON.stringify(contacts));
+  } catch {}
+  closeModal('modal-contact');
+  if (currentChat && currentChat.userId === _ctUserId) {
+    currentChat.name = name || currentChat.phone;
+    const hn = document.querySelector('.chat-header-name');
+    if (hn) hn.textContent = name || currentChat.phone;
+  }
+  loadChats();
+}
+
+// ════════════════════════════════════════════════════════════
+//  IMAGE SHARING
+// ════════════════════════════════════════════════════════════
+async function onChatImageSelected(input) {
+  const file = input.files[0];
+  if (!file || !currentChat) { input.value = ''; return; }
+  if (file.size > 8 * 1024 * 1024) { alert('Image trop grande (max 8 Mo)'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const base64 = e.target.result.split(',')[1];
+    try {
+      const up = await apiFetch('/products/upload-image', 'POST', { base64, mimeType: file.type, filename: 'chat_img' });
+      if (up && up.url) await sendTypedMessage('image', up.url);
+    } catch(err) { alert('Erreur upload : ' + err.message); }
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ════════════════════════════════════════════════════════════
+//  VOICE RECORDING
+// ════════════════════════════════════════════════════════════
+let _mediaRecorder = null, _audioChunks = [], _recInterval = null;
+
+async function toggleVoiceRecording() {
+  const btn = document.getElementById('rec-btn');
+  if (!btn) return;
+  if (_mediaRecorder && _mediaRecorder.state === 'recording') {
+    _mediaRecorder.stop();
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _audioChunks = [];
+    _mediaRecorder = new MediaRecorder(stream);
+    _mediaRecorder.ondataavailable = e => { if (e.data.size > 0) _audioChunks.push(e.data); };
+    _mediaRecorder.onstop = async () => {
+      clearInterval(_recInterval);
+      if (btn) { btn.classList.remove('recording'); btn.textContent = '🎤'; }
+      stream.getTracks().forEach(t => t.stop());
+      const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+      if (blob.size < 500) return;
+      const reader = new FileReader();
+      reader.onload = async e2 => {
+        const base64 = e2.target.result.split(',')[1];
+        try {
+          const up = await apiFetch('/products/upload-image', 'POST', { base64, mimeType: 'audio/webm', filename: 'voice' });
+          if (up && up.url) await sendTypedMessage('voice', up.url);
+        } catch(err) { alert('Erreur envoi vocal : ' + err.message); }
+      };
+      reader.readAsDataURL(blob);
+    };
+    let secs = 0;
+    _mediaRecorder.start();
+    btn.classList.add('recording'); btn.textContent = '⏹';
+    _recInterval = setInterval(() => { secs++; if (secs > 120) _mediaRecorder.stop(); }, 1000);
+  } catch(err) { alert('Microphone indisponible : ' + err.message); }
+}
+
+function playVoice(btn, url) {
+  if (!url) return;
+  const audio = new Audio(url);
+  const origText = btn.textContent;
+  btn.textContent = '⏸';
+  audio.play().catch(() => { btn.textContent = origText; });
+  audio.onended = () => { btn.textContent = '▶'; };
+  audio.onerror = () => { btn.textContent = '▶'; };
+  btn.onclick = function() {
+    if (!audio.paused) { audio.pause(); btn.textContent = '▶'; btn.onclick = null; setTimeout(() => { btn.onclick = () => playVoice(btn, url); }, 50); }
+  };
+}
+
+// ════════════════════════════════════════════════════════════
+//  REPLY
+// ════════════════════════════════════════════════════════════
+let _replyTo = null;
+
+function setReplyTo(senderName, content) {
+  _replyTo = { senderName, content };
+  const bar = document.getElementById('reply-bar');
+  if (!bar) return;
+  document.getElementById('reply-bar-name').textContent = senderName;
+  document.getElementById('reply-bar-preview').textContent = content.substring(0,100);
+  bar.classList.add('show');
+  const inp = document.getElementById('chat-input');
+  if (inp) inp.focus();
+}
+
+function clearReply() {
+  _replyTo = null;
+  const bar = document.getElementById('reply-bar');
+  if (bar) bar.classList.remove('show');
+}
+
+// ════════════════════════════════════════════════════════════
+//  CONTEXT MENU
+// ════════════════════════════════════════════════════════════
+let _ctxMsg = null;
+
+function showCtxMenu(e, wrapEl) {
+  document.getElementById('emoji-picker').classList.remove('show');
+  _ctxMsg = { msgId: wrapEl.dataset.msgId, content: wrapEl.dataset.msgContent, isSent: wrapEl.dataset.isSent === '1', type: wrapEl.dataset.msgType };
+  const menu = document.getElementById('ctx-menu');
+  const x = Math.min((e.clientX || e.pageX || 100), window.innerWidth - 200);
+  const y = Math.min((e.clientY || e.pageY || 100), window.innerHeight - 200);
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+  menu.querySelectorAll('.ctx-item.danger').forEach(el => el.style.display = _ctxMsg.isSent ? 'flex' : 'none');
+  menu.classList.add('show');
+  setTimeout(() => document.addEventListener('click', _closeCtx, { once: true }), 50);
+}
+
+function _closeCtx() { document.getElementById('ctx-menu').classList.remove('show'); }
+
+function ctxReply() {
+  _closeCtx();
+  if (!_ctxMsg) return;
+  const senderName = _ctxMsg.isSent ? (me.name || 'Moi') : (currentChat?.name || getContactName(currentChat?.userId) || 'Contact');
+  const preview = _ctxMsg.content.replace(/^\[REPLY:[^\]]+\]/,'').trim().substring(0,80);
+  setReplyTo(senderName, preview || _ctxMsg.content.substring(0,80));
+}
+
+function ctxReact() {
+  _closeCtx();
+  if (!_ctxMsg) return;
+  const menu = document.getElementById('ctx-menu');
+  const picker = document.getElementById('emoji-picker');
+  picker.style.left = (parseInt(menu.style.left)||100) + 'px';
+  picker.style.top = Math.max(50, (parseInt(menu.style.top)||200) - 65) + 'px';
+  picker.classList.add('show');
+  setTimeout(() => document.addEventListener('click', () => picker.classList.remove('show'), { once: true }), 50);
+}
+
+function ctxCopy() {
+  _closeCtx();
+  if (!_ctxMsg?.content) return;
+  const plain = _ctxMsg.content.replace(/^\[REPLY:[^\]]+\]/,'').trim();
+  navigator.clipboard?.writeText(plain).catch(() => {});
+}
+
+function ctxDelete() {
+  _closeCtx();
+  if (!_ctxMsg?.isSent) return;
+  if (!confirm('Supprimer ce message ?')) return;
+  const el = document.querySelector(`[data-msg-id="${CSS.escape(_ctxMsg.msgId)}"]`);
+  if (el) el.remove();
+}
+
+// ════════════════════════════════════════════════════════════
+//  REACTIONS
+// ════════════════════════════════════════════════════════════
+function getReactions(msgId) {
+  try {
+    const all = JSON.parse(localStorage.getItem('knk_reactions') || '{}');
+    const byMsg = all[msgId] || {};
+    return Object.entries(byMsg).filter(([,v]) => v.count > 0).map(([emoji, v]) => ({ emoji, count: v.count, mine: v.mine }));
+  } catch { return []; }
+}
+
+function buildReactHtml(reactions) {
+  if (!reactions.length) return '';
+  return `<div class="msg-reactions">${reactions.map(r =>
+    `<span class="r-chip${r.mine?' mine':''}" onclick="toggleReact(event,'${r.emoji}')">${r.emoji}${r.count>1?' '+r.count:''}</span>`
+  ).join('')}</div>`;
+}
+
+function toggleReact(e, emoji) {
+  e.stopPropagation();
+  if (!_ctxMsg) {
+    // find closest wrapper
+    const wrap = e.target.closest('[data-msg-id]');
+    if (!wrap) return;
+    _ctxMsg = { msgId: wrap.dataset.msgId, content: wrap.dataset.msgContent, isSent: wrap.dataset.isSent === '1', type: wrap.dataset.msgType };
+  }
+  addReaction(emoji);
+}
+
+function addReaction(emoji) {
+  document.getElementById('emoji-picker').classList.remove('show');
+  if (!_ctxMsg) return;
+  const msgId = _ctxMsg.msgId;
+  try {
+    const all = JSON.parse(localStorage.getItem('knk_reactions') || '{}');
+    if (!all[msgId]) all[msgId] = {};
+    if (!all[msgId][emoji]) all[msgId][emoji] = { count: 0, mine: false };
+    if (all[msgId][emoji].mine) {
+      all[msgId][emoji].count = Math.max(0, all[msgId][emoji].count - 1);
+      all[msgId][emoji].mine = false;
+    } else {
+      all[msgId][emoji].count++;
+      all[msgId][emoji].mine = true;
+    }
+    if (all[msgId][emoji].count === 0) delete all[msgId][emoji];
+    localStorage.setItem('knk_reactions', JSON.stringify(all));
+  } catch {}
+  const wrapEl = document.querySelector(`[data-msg-id="${CSS.escape(msgId)}"]`);
+  if (wrapEl) {
+    const reactions = getReactions(msgId);
+    const newHtml = buildReactHtml(reactions);
+    const old = wrapEl.querySelector('.msg-reactions');
+    if (old) old.outerHTML = newHtml || '';
+    else if (newHtml) wrapEl.insertAdjacentHTML('beforeend', newHtml);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  LIGHTBOX
+// ════════════════════════════════════════════════════════════
+function openLightbox(url) {
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+  document.getElementById('lightbox-img').src = '';
+}
+
+// ════════════════════════════════════════════════════════════
+//  MESSAGE SEARCH
+// ════════════════════════════════════════════════════════════
+function toggleMsgSearch() {
+  const bar = document.getElementById('msg-search-bar');
+  if (!bar) return;
+  const wasOpen = bar.classList.contains('show');
+  bar.classList.toggle('show');
+  if (!wasOpen) { const inp = document.getElementById('msg-search-input'); if (inp) { inp.value=''; inp.focus(); } }
+  else { filterMessages(''); }
+}
+
+function filterMessages(query) {
+  const area = document.getElementById('messages-area');
+  if (!area) return;
+  let count = 0;
+  area.querySelectorAll('.msg-wrap').forEach(w => {
+    const text = (w.dataset.msgContent || '').toLowerCase();
+    const match = !query || text.includes(query.toLowerCase());
+    w.style.display = match ? '' : 'none';
+    if (match && query) count++;
+  });
+  const badge = document.getElementById('search-count-badge');
+  if (badge) badge.textContent = query ? `${count} résultat${count>1?'s':''}` : '';
+}
+
+// ════════════════════════════════════════════════════════════
+//  SEND TYPED MESSAGE (image / voice helper)
+// ════════════════════════════════════════════════════════════
+async function sendTypedMessage(type, content) {
+  if (!currentChat) return;
+  const chatId = getChatId(me.id, currentChat.userId);
+  const msg = { chatId, receiverId: currentChat.userId, type, content, sender_id: me.id, created_at: new Date().toISOString() };
+  appendMessage(msg, false);
+  try {
+    await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type, content });
+    if (socket) socket.emit('sendMessage', { ...msg, senderId: me.id, receiverId: currentChat.userId });
+    loadChats();
+  } catch(e) { console.error('sendTypedMessage', e); }
+}
 </script>
 </body>
 </html>
