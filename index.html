@@ -807,7 +807,7 @@
 // ════════════════════════════════════════════════════════════
 //  CONFIG
 // ════════════════════════════════════════════════════════════
-const API = 'https://n8n.srv1424726.hstgr.cloud/konekta';
+const API = 'http://187.77.161.52:3001';
 let token = localStorage.getItem('knk_token');
 let me = JSON.parse(localStorage.getItem('knk_user') || 'null');
 let socket = null;
@@ -856,7 +856,7 @@ async function sendOtp() {
       showMsg('phone-msg', data.message || 'Erreur', 'error');
     }
   } catch(e) {
-    showMsg('phone-msg', 'Serveur inaccessible (localhost:3000)', 'error');
+    showMsg('phone-msg', 'Serveur inaccessible. Réessayez.', 'error');
   }
   btn.disabled = false;
   btn.innerHTML = 'Recevoir le code OTP';
