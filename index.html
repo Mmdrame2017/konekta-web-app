@@ -2168,13 +2168,10 @@ async function toggleVoiceRecording() {
       stream.getTracks().forEach(t => t.stop());
       const blob = new Blob(_audioChunks, { type: 'audio/webm' });
       if (blob.size < 500) return;
+      // Utilise data URL directement (pas d'upload — backend n'accepte que les images)
       const reader = new FileReader();
       reader.onload = async e2 => {
-        const base64 = e2.target.result.split(',')[1];
-        try {
-          const up = await apiFetch('/products/upload-image', 'POST', { base64, mimeType: 'audio/webm', filename: 'voice' });
-          if (up && up.url) await sendTypedMessage('voice', up.url);
-        } catch(err) { alert('Erreur envoi vocal : ' + err.message); }
+        await sendTypedMessage('voice', e2.target.result);
       };
       reader.readAsDataURL(blob);
     };
