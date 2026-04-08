@@ -615,8 +615,10 @@
             <h3>Messages</h3>
             <div class="search-box">
               <span>🔍</span>
-              <input type="text" id="search-phone" placeholder="Chercher par téléphone..." oninput="searchContact()">
+              <input type="text" id="search-phone" placeholder="Chercher par téléphone..." onkeydown="if(event.key==='Enter') searchContact()" oninput="filterChats()">
+              <button onclick="searchContact()" style="background:var(--primary);color:#fff;border:none;border-radius:20px;padding:4px 12px;font-size:13px;cursor:pointer;flex-shrink:0">OK</button>
             </div>
+            <div id="search-msg" style="font-size:12px;color:var(--text2);margin-top:6px;min-height:16px"></div>
           </div>
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
           <button class="new-chat-btn" onclick="openNewChatModal()">+ Nouvelle conversation</button>
@@ -1398,15 +1400,32 @@ function openNewChatModal() {
   openModal('modal-new-chat');
 }
 
+function filterChats() {
+  const q = document.getElementById('search-phone').value.replace(/\D/g,'');
+  document.querySelectorAll('.chat-item').forEach(el => {
+    const name = (el.querySelector('.chat-item-name')?.textContent || '').replace(/\D/g,'');
+    el.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
+  if (!q) document.getElementById('search-msg').textContent = '';
+}
+
 async function searchContact() {
   const phone = document.getElementById('search-phone').value.trim();
-  // Attendre un numéro complet (min 9 chiffres) avant de chercher
   const digits = phone.replace(/\D/g,'');
-  if (digits.length < 9) return;
+  const msg = document.getElementById('search-msg');
+  if (digits.length < 8) { msg.textContent = '⚠️ Entrez au moins 8 chiffres'; return; }
+  msg.textContent = '🔍 Recherche…';
   try {
     const data = await apiFetch(`/users/search?phone=${encodeURIComponent(phone)}`);
-    if (data && data.id) openChat({ userId: data.id, name: data.name || data.phone, phone: data.phone });
-  } catch(e) {}
+    if (data && data.id) {
+      msg.textContent = '';
+      document.getElementById('search-phone').value = '';
+      filterChats();
+      openChat({ userId: data.id, name: data.name || data.phone, phone: data.phone });
+    } else {
+      msg.textContent = '❌ Aucun compte trouvé pour ce numéro';
+    }
+  } catch(e) { msg.textContent = '❌ Erreur réseau'; }
 }
 
 let foundContact = null;
