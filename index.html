@@ -1027,6 +1027,7 @@ let token = localStorage.getItem('knk_token');
 let me = JSON.parse(localStorage.getItem('knk_user') || 'null');
 let socket = null;
 let currentChat = null; // { userId, name, phone }
+let chatContacts = {}; // userId -> { userId, name, phone }
 let payAmount = '0';
 let payTarget = null; // { userId, name }
 let buyTargetProduct = null;
@@ -1128,6 +1129,15 @@ function showApp() {
   loadChats();
   loadProducts();
   loadWallet();
+
+  // Polling de secours (Socket.io serverless = pas de push)
+  setInterval(() => {
+    loadChats();
+    if (currentChat) loadMessages(currentChat);
+  }, 8000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { loadChats(); if (currentChat) loadMessages(currentChat); }
+  });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1374,8 +1384,10 @@ async function loadChats() {
     el.innerHTML = data.map(chat => {
       const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
       const savedName = getContactName(otherId);
-      const serverName = chat.other?.name || chat.other?.phone || null;
+      const serverPhone = chat.other?.phone || '';
+      const serverName = chat.other?.name || serverPhone || null;
       const displayName = savedName || serverName || (otherId.slice(0,8) + '…');
+      chatContacts[otherId] = { userId: otherId, name: displayName, phone: serverPhone };
       const initials = (displayName||'?').charAt(0).toUpperCase();
       const previewMap = { payment: '💳 Paiement Wave', image: '📷 Photo', voice: '🎤 Vocal' };
       const preview = previewMap[chat.type] || (chat.content || '…');
@@ -1457,10 +1469,8 @@ async function startChat() {
 }
 
 async function openChatById(userId) {
-  try {
-    // Try to get user info from messages
-    openChat({ userId, name: userId.slice(0,8) + '...', phone: '—' });
-  } catch(e) {}
+  const contact = chatContacts[userId] || { userId, name: userId.slice(0,8) + '…', phone: '' };
+  openChat(contact);
 }
 
 function openChat(contact) {
