@@ -1028,6 +1028,7 @@ let me = JSON.parse(localStorage.getItem('knk_user') || 'null');
 let socket = null;
 let currentChat = null; // { userId, name, phone }
 let chatContacts = {}; // userId -> { userId, name, phone }
+let usersById = {};   // id -> { name, phone } — chargé depuis /users/all
 let payAmount = '0';
 let payTarget = null; // { userId, name }
 let buyTargetProduct = null;
@@ -1121,12 +1122,19 @@ function logout() {
 // ════════════════════════════════════════════════════════════
 //  SHOW APP
 // ════════════════════════════════════════════════════════════
+async function loadAllUsers() {
+  try {
+    const data = await apiFetch('/users/all');
+    if (Array.isArray(data)) data.forEach(u => { usersById[u.id] = u; });
+  } catch(e) {}
+}
+
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   initSocket();
   loadProfile();
-  loadChats();
+  loadAllUsers().then(() => loadChats());
   loadProducts();
   loadWallet();
 
@@ -1384,8 +1392,9 @@ async function loadChats() {
     el.innerHTML = data.map(chat => {
       const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
       const savedName = getContactName(otherId);
-      const serverPhone = chat.other?.phone || '';
-      const serverName = chat.other?.name || serverPhone || null;
+      const knownUser = usersById[otherId] || chat.other || {};
+      const serverPhone = knownUser.phone || '';
+      const serverName = knownUser.name || serverPhone || null;
       const displayName = savedName || serverName || (otherId.slice(0,8) + '…');
       chatContacts[otherId] = { userId: otherId, name: displayName, phone: serverPhone };
       const initials = (displayName||'?').charAt(0).toUpperCase();
