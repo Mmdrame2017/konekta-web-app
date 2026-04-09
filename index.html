@@ -1816,8 +1816,9 @@ async function showGroupInfo(groupId, groupName) {
 
   const listHtml = members.length
     ? members.map(m => {
-        const name = usersById[m.user_id]?.name || m.user_id?.substring(0,8) + '...';
-        const phone = usersById[m.user_id]?.phone || '';
+        const u = m.user || usersById[m.user_id] || {};
+        const name = u.name || u.phone || (m.user_id?.substring(0,8) + '...');
+        const phone = u.phone || '';
         const initials = (name[0] || '?').toUpperCase();
         const isAdmin = m.role === 'admin';
         return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
