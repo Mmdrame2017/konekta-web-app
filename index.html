@@ -3258,8 +3258,34 @@ function initGroupCallListeners() {
 // ════════════════════════════════════════════════════════════
 //  WEBRTC CALL  (audio P2P via Socket.io signaling)
 // ════════════════════════════════════════════════════════════
-const STUN = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+const STUN = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  // TURN servers — traversée NAT mobile 4G (carrier-grade NAT)
+  { urls: 'turn:openrelay.metered.ca:80',         username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443',        username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
+]};
 let _pc = null, _localStream = null, _callPeer = null, _callTimer = null, _callSecs = 0, _muted = false;
+let _iceCandidateQueue = []; // queue candidats ICE reçus avant setRemoteDescription
+
+// Ajouter un candidat ICE ou le mettre en file si remoteDescription pas encore prêt
+async function _addIceCandidate(candidate) {
+  if (!candidate) return;
+  if (_pc && _pc.remoteDescription) {
+    try { await _pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+  } else {
+    _iceCandidateQueue.push(candidate);
+  }
+}
+// Vider la file après setRemoteDescription
+async function _flushIceCandidates() {
+  while (_iceCandidateQueue.length) {
+    const c = _iceCandidateQueue.shift();
+    try { if (_pc) await _pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+  }
+}
 
 // ── Outgoing call ────────────────────────────────────────────
 async function startCall(userId, userName) {
@@ -3305,6 +3331,7 @@ async function acceptCall() {
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: id, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   await _pc.setRemoteDescription(new RTCSessionDescription(offer));
+  await _flushIceCandidates(); // vider les candidats reçus avant setRemoteDescription
   const answer = await _pc.createAnswer();
   await _pc.setLocalDescription(answer);
   socket.emit('callAnswer', { to: id, answer });
@@ -3335,6 +3362,7 @@ function cleanupCall() {
   if (_pc) { _pc.close(); _pc = null; }
   if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
   _stopRemoteStream();
+  _iceCandidateQueue = [];
   _callPeer = null;
   document.getElementById('call-overlay')?.remove();
 }
@@ -3392,11 +3420,12 @@ function initCallListeners() {
   socket.on('callAnswered', async ({ answer }) => {
     if (_pc) {
       await _pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await _flushIceCandidates(); // vider les candidats reçus avant setRemoteDescription
       showCallOverlay('active', _callPeer?.name || '?', _callPeer?.id);
     }
   });
   socket.on('iceCandidate', async ({ candidate }) => {
-    if (_pc && candidate) try { await _pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+    await _addIceCandidate(candidate);
   });
   socket.on('callHangup', () => { _stopRing(); cleanupCall(); });
   socket.on('callDeclined', () => {
