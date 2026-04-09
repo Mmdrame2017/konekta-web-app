@@ -3398,7 +3398,7 @@ function initCallListeners() {
   socket.on('iceCandidate', async ({ candidate }) => {
     if (_pc && candidate) try { await _pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
   });
-  socket.on('callHangup', () => { cleanupCall(); });
+  socket.on('callHangup', () => { _stopRing(); cleanupCall(); });
   socket.on('callDeclined', () => {
     cleanupCall();
     alert('Appel refusé');
