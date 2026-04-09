@@ -1853,10 +1853,10 @@ async function showGroupInfo(groupId, groupName) {
 }
 
 async function loadGroupMessages(groupId) {
+  const area = document.getElementById('messages-area');
+  if (!area) return;
   try {
     const data = await apiFetch(`/groups/${groupId}/messages`);
-    const area = document.getElementById('messages-area');
-    if (!area) return;
     if (!data || !data.length) {
       area.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px;font-size:13px">Commencez la conversation de groupe 👋</div>';
       return;
@@ -1864,7 +1864,9 @@ async function loadGroupMessages(groupId) {
     area.innerHTML = '';
     data.forEach(msg => appendMessage(msg, true, true));
     area.scrollTop = area.scrollHeight;
-  } catch(e) {}
+  } catch(e) {
+    area.innerHTML = `<div style="text-align:center;color:#e74c3c;padding:40px;font-size:13px">Erreur : ${escHtml(e.message)}</div>`;
+  }
 }
 
 async function sendGroupMessage() {
@@ -1919,32 +1921,39 @@ function removeGroupMember(userId) {
 }
 
 async function searchGroupMember() {
-  const phone = document.getElementById('group-search-phone').value.trim();
+  const raw = document.getElementById('group-search-phone').value.trim();
   const resultEl = document.getElementById('group-search-result');
-  if (!phone) return;
+  if (!raw) return;
   resultEl.innerHTML = '<span style="font-size:13px;color:var(--text2)">Recherche...</span>';
-  try {
-    const data = await apiFetch('/users/all');
-    const norm = phone.replace(/\s/g,'');
-    const found = (Array.isArray(data) ? data : []).filter(u =>
-      u.id !== me.id && (u.phone||'').replace(/\s/g,'').includes(norm)
-    );
-    if (!found.length) {
-      resultEl.innerHTML = '<span style="font-size:13px;color:#e74c3c">Aucun utilisateur trouvé pour ce numéro</span>';
-      return;
-    }
-    resultEl.innerHTML = found.map(u => {
-      const label = u.name || u.phone;
-      const already = groupSelectedMembers[u.id] ? 'style="opacity:.5;pointer-events:none"' : '';
-      return `<div ${already} style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
-        <div class="chat-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0">${label[0].toUpperCase()}</div>
-        <div style="flex:1"><div style="font-size:14px;font-weight:600">${escHtml(label)}</div><div style="font-size:12px;color:var(--text2)">${escHtml(u.phone||'')}</div></div>
-        <button onclick="addGroupMember('${escHtml(u.id)}','${escHtml(u.name||'')}','${escHtml(u.phone||'')}',this)" style="background:var(--green);border:none;border-radius:20px;padding:5px 12px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">+ Ajouter</button>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    resultEl.innerHTML = '<span style="font-size:13px;color:#e74c3c">Erreur de recherche</span>';
+
+  // Essayer plusieurs formats du numéro
+  const stripped = raw.replace(/\s/g, '');
+  const variants = [stripped];
+  if (stripped.startsWith('+')) variants.push(stripped.slice(1));
+  else if (/^\d{9}$/.test(stripped)) variants.push('+221' + stripped, '221' + stripped);
+
+  let found = null;
+  for (const v of variants) {
+    try {
+      const u = await apiFetch('/users/search?phone=' + encodeURIComponent(v));
+      if (u && u.id && u.id !== me.id) { found = u; break; }
+    } catch(e) {}
   }
+
+  if (!found) {
+    resultEl.innerHTML = '<span style="font-size:13px;color:#e74c3c">Aucun utilisateur trouvé pour ce numéro</span>';
+    return;
+  }
+  const label = found.name || found.phone;
+  const already = groupSelectedMembers[found.id];
+  resultEl.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px">
+    <div class="chat-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0">${label[0].toUpperCase()}</div>
+    <div style="flex:1"><div style="font-size:14px;font-weight:600">${escHtml(label)}</div><div style="font-size:12px;color:var(--text2)">${escHtml(found.phone||'')}</div></div>
+    ${already
+      ? '<span style="font-size:13px;color:var(--green);font-weight:700">✓ Déjà ajouté</span>'
+      : `<button onclick="addGroupMember('${escHtml(found.id)}','${escHtml(found.name||'')}','${escHtml(found.phone||'')}',this)" style="background:var(--green);border:none;border-radius:20px;padding:5px 12px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">+ Ajouter</button>`
+    }
+  </div>`;
 }
 
 function addGroupMember(userId, name, phone, btn) {
