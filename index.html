@@ -3017,6 +3017,7 @@ async function startGroupCall(groupId, groupName) {
 }
 
 async function joinGroupCall(groupId, groupName) {
+  _stopRing();
   if (_groupCallId || _pc) { alert('Appel déjà en cours'); return; }
   try {
     _groupLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -3027,6 +3028,7 @@ async function joinGroupCall(groupId, groupName) {
 }
 
 function declineGroupCall(groupId) {
+  _stopRing();
   document.getElementById('group-call-invite')?.remove();
 }
 
@@ -3143,11 +3145,50 @@ function showGroupCallInvite(groupId, groupName, callerName) {
   setTimeout(() => div.remove(), 30000); // auto-dismiss 30s
 }
 
+// AudioContext partagé — créé et débloqué dès la première interaction utilisateur
+let _sharedAudioCtx = null;
+function _ensureAudioCtx() {
+  if (!_sharedAudioCtx) {
+    try { _sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return null; }
+  }
+  if (_sharedAudioCtx.state === 'suspended') _sharedAudioCtx.resume();
+  return _sharedAudioCtx;
+}
+// Débloquer l'AudioContext à chaque interaction (click, touch)
+document.addEventListener('click', () => _ensureAudioCtx());
+document.addEventListener('touchstart', () => _ensureAudioCtx());
+
+let _ringNode = null;
+function _startRing() {
+  if (_ringNode) return; // déjà en train de sonner
+  const ctx = _ensureAudioCtx();
+  if (!ctx) return;
+  let t = 0, running = true;
+  function beep() {
+    if (!running) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.45);
+    } catch(e) {}
+    t = setTimeout(beep, 1600);
+  }
+  beep();
+  _ringNode = { stop: () => { running = false; clearTimeout(t); _ringNode = null; } };
+}
+function _stopRing() {
+  if (_ringNode) { _ringNode.stop(); }
+}
+
 function initGroupCallListeners() {
   if (!socket) return;
   socket.on('groupCallInvite', ({ groupId, callerId, callerName }) => {
-    // Trouver le nom du groupe (depuis la liste des chats ou currentChat)
     const groupName = (currentChat?.isGroup && currentChat.groupId === groupId) ? currentChat.name : 'Groupe';
+    _startRing();
     showGroupCallInvite(groupId, groupName, callerName);
   });
   socket.on('groupCallExisting', async ({ groupId, peers }) => {
@@ -3178,6 +3219,10 @@ function initGroupCallListeners() {
     if (pc && candidate) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
   });
   socket.on('groupCallPeerLeft', ({ groupId, peerId }) => { _onGroupPeerLeft(peerId); });
+  socket.on('groupCallEnded', ({ groupId }) => {
+    _stopRing();
+    document.getElementById('group-call-invite')?.remove();
+  });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -3189,13 +3234,18 @@ let _pc = null, _localStream = null, _callPeer = null, _callTimer = null, _callS
 // ── Outgoing call ────────────────────────────────────────────
 async function startCall(userId, userName) {
   if (_pc) return;
+  // Débloquer l'audio pendant le geste utilisateur (click sur le bouton appel)
+  const audio = document.getElementById('call-audio');
+  if (audio) { audio.muted = false; audio.play().catch(() => {}); }
   try {
     _localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch(e) { alert('Microphone indisponible : ' + e.message); return; }
   _callPeer = { id: userId, name: userName };
   _pc = new RTCPeerConnection(STUN);
   _localStream.getTracks().forEach(t => _pc.addTrack(t, _localStream));
-  _pc.ontrack = e => { const a = document.getElementById('call-audio'); if (a) { a.srcObject = e.streams[0]; a.play().catch(()=>{}); } };
+  _pc.ontrack = e => {
+    if (audio && e.streams && e.streams[0]) { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); }
+  };
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: userId, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   const offer = await _pc.createOffer();
@@ -3207,18 +3257,26 @@ async function startCall(userId, userName) {
 // ── Incoming call ────────────────────────────────────────────
 function onIncomingCall({ from, callerName, offer }) {
   _callPeer = { id: from, name: callerName, offer };
+  _startRing();
   showCallOverlay('incoming', callerName, from);
 }
 
 async function acceptCall() {
   if (!_callPeer) return;
+  _stopRing();
+  // Débloquer l'élément audio PENDANT le geste utilisateur (sinon bloqué par autoplay mobile)
+  const audio = document.getElementById('call-audio');
+  if (audio) { audio.muted = false; audio.play().catch(() => {}); }
   const { id, name, offer } = _callPeer;
   try {
     _localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch(e) { alert('Microphone indisponible : ' + e.message); declineCall(); return; }
   _pc = new RTCPeerConnection(STUN);
   _localStream.getTracks().forEach(t => _pc.addTrack(t, _localStream));
-  _pc.ontrack = e => { const a = document.getElementById('call-audio'); if (a) { a.srcObject = e.streams[0]; a.play().catch(()=>{}); } };
+  _pc.ontrack = e => {
+    const a = document.getElementById('call-audio');
+    if (a && e.streams && e.streams[0]) { a.srcObject = e.streams[0]; a.play().catch(() => {}); }
+  };
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: id, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   await _pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -3229,6 +3287,7 @@ async function acceptCall() {
 }
 
 function declineCall() {
+  _stopRing();
   if (_callPeer && socket) socket.emit('callDecline', { to: _callPeer.id });
   cleanupCall();
 }
@@ -3300,8 +3359,10 @@ function showCallOverlay(state, peerName, peerId) {
 }
 
 // ── Socket listeners (appelés après init socket) ─────────────
+let _callListenersInit = false;
 function initCallListeners() {
-  if (!socket) return;
+  if (!socket || _callListenersInit) return;
+  _callListenersInit = true;
   initGroupCallListeners();
   socket.on('incomingCall', onIncomingCall);
   socket.on('callAnswered', async ({ answer }) => {
@@ -3320,6 +3381,6 @@ function initCallListeners() {
   });
 }
 </script>
-<audio id="call-audio" autoplay playsinline style="display:none"></audio>
+<audio id="call-audio" autoplay playsinline style="position:absolute;width:0;height:0;opacity:0;pointer-events:none"></audio>
 </body>
 </html>
