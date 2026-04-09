@@ -1444,7 +1444,7 @@ async function loadChats() {
         const groupName = chat.group_name || 'Groupe';
         const safeGid = escHtml(chat.group_id);
         const safeGname = escHtml(groupName);
-        return `<div class="chat-item" onclick="openGroupChat('${chat.group_id}', ${JSON.stringify(groupName)})" data-group="${safeGid}">
+        return `<div class="chat-item" data-group="${safeGid}" data-gname="${safeGname}" onclick="openGroupChat(this.dataset.group, this.dataset.gname)">
           <div class="chat-avatar group-avatar">👥</div>
           <div class="chat-item-info">
             <div class="chat-item-name">${safeGname} <span class="group-badge">groupe</span></div>
