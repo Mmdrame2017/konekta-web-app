@@ -1823,7 +1823,16 @@ async function showGroupInfo(groupId, groupName) {
   openModal('modal-group-info');
   try {
     const data = await apiFetch(`/groups/${groupId}`);
-    const members = data.members || [];
+    // Dédupliquer par téléphone normalisé (garder l'entrée avec un vrai nom)
+    const seen = new Set();
+    const members = (data.members || []).filter(m => {
+      const u = m.user || usersById[m.user_id] || {};
+      const phone = normalizePhoneDisplay(u.phone || '');
+      const key = phone || m.user_id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     document.getElementById('group-info-title').textContent = `👥 ${groupName} — ${members.length} membre${members.length>1?'s':''}`;
     document.getElementById('group-info-body').innerHTML = members.length
       ? members.map(m => {
