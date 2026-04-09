@@ -1015,6 +1015,17 @@
   </div>
 </div>
 
+<!-- Group Info -->
+<div class="modal-overlay" id="modal-group-info">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3 id="group-info-title">👥 Membres</h3>
+      <button class="close-btn" onclick="closeModal('modal-group-info')">✕</button>
+    </div>
+    <div id="group-info-body" style="max-height:60vh;overflow-y:auto;padding-top:8px"></div>
+  </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <img id="lightbox-img" src="" alt="Image">
@@ -1807,50 +1818,32 @@ async function openGroupChat(groupId, groupName) {
 }
 
 async function showGroupInfo(groupId, groupName) {
-  // Fetch group members from API
-  let members = [];
+  document.getElementById('group-info-title').textContent = `👥 ${groupName} — chargement...`;
+  document.getElementById('group-info-body').innerHTML = '<div style="color:var(--text2);font-size:13px;padding:20px;text-align:center">Chargement...</div>';
+  openModal('modal-group-info');
   try {
     const data = await apiFetch(`/groups/${groupId}`);
-    members = data.members || [];
-  } catch(e) {}
-
-  const listHtml = members.length
-    ? members.map(m => {
-        const u = m.user || usersById[m.user_id] || {};
-        const name = u.name || u.phone || (m.user_id?.substring(0,8) + '...');
-        const phone = u.phone || '';
-        const initials = (name[0] || '?').toUpperCase();
-        const isAdmin = m.role === 'admin';
-        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div class="chat-avatar" style="width:40px;height:40px;font-size:16px;flex-shrink:0">${initials}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:14px">${escHtml(name)}</div>
-            <div style="font-size:12px;color:var(--text2)">${escHtml(phone)}</div>
-          </div>
-          ${isAdmin ? '<span style="font-size:11px;background:rgba(0,168,84,.15);color:var(--green);border:1px solid var(--green);border-radius:20px;padding:2px 8px;flex-shrink:0">Admin</span>' : ''}
-        </div>`;
-      }).join('')
-    : '<div style="color:var(--text2);font-size:13px;padding:20px;text-align:center">Aucun membre trouvé</div>';
-
-  // Build modal dynamically
-  let modal = document.getElementById('modal-group-info');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'modal-group-info';
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `<div class="modal-box" style="max-width:420px">
-      <div class="modal-header">
-        <h3 id="group-info-title"></h3>
-        <button class="close-btn" onclick="closeModal('modal-group-info')">✕</button>
-      </div>
-      <div id="group-info-body" style="max-height:60vh;overflow-y:auto;padding-top:8px"></div>
-    </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if(e.target===modal) closeModal('modal-group-info'); });
+    const members = data.members || [];
+    document.getElementById('group-info-title').textContent = `👥 ${groupName} — ${members.length} membre${members.length>1?'s':''}`;
+    document.getElementById('group-info-body').innerHTML = members.length
+      ? members.map(m => {
+          const u = m.user || usersById[m.user_id] || {};
+          const name = u.name || u.phone || (m.user_id?.substring(0,8) + '...');
+          const phone = u.phone || '';
+          const isAdmin = m.role === 'admin';
+          return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div class="chat-avatar" style="width:40px;height:40px;font-size:16px;flex-shrink:0">${(name[0]||'?').toUpperCase()}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:14px">${escHtml(name)}</div>
+              <div style="font-size:12px;color:var(--text2)">${escHtml(phone)}</div>
+            </div>
+            ${isAdmin ? '<span style="font-size:11px;background:rgba(0,168,84,.15);color:var(--green);border:1px solid var(--green);border-radius:20px;padding:2px 8px;flex-shrink:0">Admin</span>' : ''}
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--text2);font-size:13px;padding:20px;text-align:center">Aucun membre trouvé</div>';
+  } catch(e) {
+    document.getElementById('group-info-body').innerHTML = `<div style="color:#e74c3c;font-size:13px;padding:20px;text-align:center">Erreur : ${escHtml(e.message)}</div>`;
   }
-  document.getElementById('group-info-title').textContent = `👥 ${groupName} — ${members.length} membre${members.length>1?'s':''}`;
-  document.getElementById('group-info-body').innerHTML = listHtml;
-  modal.classList.add('open');
 }
 
 async function loadGroupMessages(groupId) {
