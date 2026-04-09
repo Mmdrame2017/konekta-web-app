@@ -1776,7 +1776,7 @@ async function openGroupChat(groupId, groupName) {
         <div class="chat-header-status" id="chat-status">Conversation de groupe</div>
       </div>
       <div class="chat-header-actions">
-        <button class="icon-btn" onclick="showGroupInfo('${escHtml(groupId)}', ${JSON.stringify(escHtml(groupName))})" title="Membres du groupe">ℹ️</button>
+        <button class="icon-btn" id="grp-info-btn" data-gid="${escHtml(groupId)}" data-gname="${escHtml(groupName)}" onclick="showGroupInfo(this.dataset.gid, this.dataset.gname)" title="Membres du groupe">ℹ️</button>
         <button class="icon-btn" onclick="toggleMsgSearch()" title="Rechercher">🔍</button>
       </div>
     </div>
