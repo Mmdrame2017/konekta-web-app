@@ -996,9 +996,15 @@
       <input type="text" id="new-group-name" placeholder="Ex: Famille, Équipe...">
     </div>
     <div class="form-group">
-      <label>Membres (cochez les contacts)</label>
-      <div id="group-members-list" style="max-height:220px;overflow-y:auto;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius);padding:8px;display:flex;flex-direction:column;gap:4px">
-        <div style="color:var(--text2);font-size:13px;padding:8px">Chargement des contacts...</div>
+      <label>Rechercher des membres</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input type="tel" id="group-search-phone" placeholder="+221 77 000 00 00" style="flex:1;padding:10px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;outline:none;font-family:inherit" onkeydown="if(event.key==='Enter') searchGroupMember()">
+        <button onclick="searchGroupMember()" style="background:var(--green);border:none;border-radius:var(--radius);padding:0 14px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Chercher</button>
+      </div>
+      <div id="group-search-result" style="margin-bottom:8px"></div>
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">Membres sélectionnés :</label>
+      <div id="group-members-list" style="min-height:48px;max-height:200px;overflow-y:auto;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius);padding:8px;display:flex;flex-direction:column;gap:4px">
+        <div style="color:var(--text2);font-size:13px;padding:4px">Aucun membre ajouté</div>
       </div>
     </div>
     <p class="msg error" id="new-group-msg"></p>
@@ -1877,33 +1883,82 @@ async function sendGroupMessage() {
   } catch(e) {}
 }
 
+// Membres sélectionnés pour le nouveau groupe : Map userId -> {id, name, phone}
+let groupSelectedMembers = {};
+
 function openNewGroupModal() {
   document.getElementById('new-group-name').value = '';
   document.getElementById('new-group-msg').textContent = '';
-  // Remplir la liste des membres depuis usersById
-  const listEl = document.getElementById('group-members-list');
-  const users = Object.values(usersById).filter(u => u.id !== me.id);
-  if (!users.length) {
-    listEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">Aucun utilisateur disponible</div>';
-  } else {
-    listEl.innerHTML = users.map(u => {
-      const label = u.name || u.phone || u.id.slice(0,8);
-      return `<label style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;transition:.15s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">\
-        <input type="checkbox" value="${escHtml(u.id)}" style="width:16px;height:16px;accent-color:var(--green)">\
-        <div class="chat-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0">${(label).charAt(0).toUpperCase()}</div>\
-        <div style="font-size:14px;font-weight:500">${escHtml(label)}</div>\
-      </label>`;
-    }).join('');
-  }
+  document.getElementById('group-search-phone').value = '';
+  document.getElementById('group-search-result').innerHTML = '';
+  groupSelectedMembers = {};
+  renderGroupMembersList();
   openModal('modal-new-group');
+}
+
+function renderGroupMembersList() {
+  const listEl = document.getElementById('group-members-list');
+  const members = Object.values(groupSelectedMembers);
+  if (!members.length) {
+    listEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:4px">Aucun membre ajouté</div>';
+    return;
+  }
+  listEl.innerHTML = members.map(u => {
+    const label = u.name || u.phone || u.id.slice(0,8);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;background:rgba(0,168,84,.08);border-radius:8px">
+      <div class="chat-avatar" style="width:30px;height:30px;font-size:12px;flex-shrink:0">${label[0].toUpperCase()}</div>
+      <div style="flex:1;font-size:14px;font-weight:500">${escHtml(label)}<span style="font-size:11px;color:var(--text2);margin-left:6px">${escHtml(u.phone||'')}</span></div>
+      <button onclick="removeGroupMember('${escHtml(u.id)}')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:0 4px">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function removeGroupMember(userId) {
+  delete groupSelectedMembers[userId];
+  renderGroupMembersList();
+}
+
+async function searchGroupMember() {
+  const phone = document.getElementById('group-search-phone').value.trim();
+  const resultEl = document.getElementById('group-search-result');
+  if (!phone) return;
+  resultEl.innerHTML = '<span style="font-size:13px;color:var(--text2)">Recherche...</span>';
+  try {
+    const data = await apiFetch('/users/all');
+    const norm = phone.replace(/\s/g,'');
+    const found = (Array.isArray(data) ? data : []).filter(u =>
+      u.id !== me.id && (u.phone||'').replace(/\s/g,'').includes(norm)
+    );
+    if (!found.length) {
+      resultEl.innerHTML = '<span style="font-size:13px;color:#e74c3c">Aucun utilisateur trouvé pour ce numéro</span>';
+      return;
+    }
+    resultEl.innerHTML = found.map(u => {
+      const label = u.name || u.phone;
+      const already = groupSelectedMembers[u.id] ? 'style="opacity:.5;pointer-events:none"' : '';
+      return `<div ${already} style="display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+        <div class="chat-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0">${label[0].toUpperCase()}</div>
+        <div style="flex:1"><div style="font-size:14px;font-weight:600">${escHtml(label)}</div><div style="font-size:12px;color:var(--text2)">${escHtml(u.phone||'')}</div></div>
+        <button onclick="addGroupMember('${escHtml(u.id)}','${escHtml(u.name||'')}','${escHtml(u.phone||'')}',this)" style="background:var(--green);border:none;border-radius:20px;padding:5px 12px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">+ Ajouter</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    resultEl.innerHTML = '<span style="font-size:13px;color:#e74c3c">Erreur de recherche</span>';
+  }
+}
+
+function addGroupMember(userId, name, phone, btn) {
+  groupSelectedMembers[userId] = { id: userId, name, phone };
+  btn.textContent = '✓ Ajouté'; btn.style.background = 'var(--text2)';
+  btn.style.pointerEvents = 'none';
+  renderGroupMembersList();
 }
 
 async function createGroup() {
   const name = document.getElementById('new-group-name').value.trim();
   if (!name) { document.getElementById('new-group-msg').textContent = 'Nom du groupe requis'; return; }
-  const checked = [...document.querySelectorAll('#group-members-list input[type=checkbox]:checked')];
-  const memberIds = checked.map(cb => cb.value);
-  if (!memberIds.length) { document.getElementById('new-group-msg').textContent = 'Sélectionnez au moins un membre'; return; }
+  const memberIds = Object.keys(groupSelectedMembers);
+  if (!memberIds.length) { document.getElementById('new-group-msg').textContent = 'Ajoutez au moins un membre'; return; }
   const btn = document.getElementById('create-group-btn');
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
   try {
