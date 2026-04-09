@@ -1606,7 +1606,8 @@ function openChat(contact) {
       </div>
     </div>
     <div class="chat-input-area">
-      <button class="attach-btn" onclick="document.getElementById('chat-img-input').click()" title="Joindre une image">📎</button>
+      <button class="attach-btn" onclick="document.getElementById('chat-img-input').click()" title="Photo">📷</button>
+      <button class="attach-btn" onclick="document.getElementById('chat-file-input').click()" title="Fichier">📎</button>
       <textarea class="chat-input scrollbar-custom" id="chat-input" placeholder="Message..." rows="1"
         onkeydown="handleInputKey(event)" oninput="handleTyping()"></textarea>
       <button class="rec-btn" id="rec-btn" onclick="toggleVoiceRecording()" title="Message vocal">🎤</button>
