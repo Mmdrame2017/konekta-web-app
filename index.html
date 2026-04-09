@@ -1827,6 +1827,7 @@ async function openGroupChat(groupId, groupName) {
         <div class="chat-header-status" id="chat-status">Conversation de groupe</div>
       </div>
       <div class="chat-header-actions">
+        <button class="icon-btn" id="grp-call-btn" data-gid="${escHtml(groupId)}" data-gname="${escHtml(groupName)}" onclick="startGroupCall(this.dataset.gid, this.dataset.gname)" title="Appel de groupe">📞</button>
         <button class="icon-btn" id="grp-info-btn" data-gid="${escHtml(groupId)}" data-gname="${escHtml(groupName)}" onclick="showGroupInfo(this.dataset.gid, this.dataset.gname)" title="Membres du groupe">ℹ️</button>
         <button class="icon-btn" onclick="toggleMsgSearch()" title="Rechercher">🔍</button>
       </div>
@@ -2992,6 +2993,194 @@ async function sendTypedMessage(type, content) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  WEBRTC GROUP CALL  (mesh audio via Socket.io)
+// ════════════════════════════════════════════════════════════
+let _groupCallId = null, _groupPCs = {}, _groupLocalStream = null;
+let _groupCallTimer = null, _groupCallSecs = 0, _groupMuted = false;
+let _groupPeerNames = {}; // peerId -> name
+
+async function startGroupCall(groupId, groupName) {
+  if (_groupCallId || _pc) { alert('Appel déjà en cours'); return; }
+  // Récupérer les membres du groupe
+  let memberIds = [];
+  try {
+    const data = await apiFetch(`/groups/${groupId}`);
+    memberIds = (data.members || []).map(m => m.user_id).filter(id => id !== me?.id);
+  } catch(e) { alert('Impossible de charger les membres'); return; }
+  if (!memberIds.length) { alert('Aucun autre membre dans ce groupe'); return; }
+  try {
+    _groupLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) { alert('Microphone indisponible : ' + e.message); return; }
+  _groupCallId = groupId;
+  socket.emit('groupCallStart', { groupId, memberIds, userId: me.id, userName: me.name || me.phone });
+  showGroupCallOverlay(groupName, []);
+}
+
+async function joinGroupCall(groupId, groupName) {
+  if (_groupCallId || _pc) { alert('Appel déjà en cours'); return; }
+  try {
+    _groupLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch(e) { alert('Microphone indisponible : ' + e.message); return; }
+  _groupCallId = groupId;
+  socket.emit('groupCallJoin', { groupId, userId: me.id, userName: me.name || me.phone });
+  showGroupCallOverlay(groupName, []);
+}
+
+function declineGroupCall(groupId) {
+  document.getElementById('group-call-invite')?.remove();
+}
+
+async function _createGroupPC(peerId, peerName, groupId, isInitiator) {
+  if (_groupPCs[peerId]) return _groupPCs[peerId];
+  _groupPeerNames[peerId] = peerName;
+  const pc = new RTCPeerConnection(STUN);
+  _groupPCs[peerId] = pc;
+  if (_groupLocalStream) _groupLocalStream.getTracks().forEach(t => pc.addTrack(t, _groupLocalStream));
+  pc.ontrack = e => {
+    let audio = document.getElementById('gcall-audio-' + peerId);
+    if (!audio) { audio = document.createElement('audio'); audio.id = 'gcall-audio-' + peerId; audio.autoplay = true; audio.playsinline = true; document.body.appendChild(audio); }
+    audio.srcObject = e.streams[0]; audio.play().catch(() => {});
+    const dot = document.getElementById('gcall-dot-' + peerId);
+    if (dot) dot.style.background = 'var(--green)';
+  };
+  pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('groupCallIce', { groupId, to: peerId, from: me.id, candidate: e.candidate }); };
+  pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(pc.connectionState)) _onGroupPeerLeft(peerId); };
+  if (isInitiator) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('groupCallOffer', { groupId, to: peerId, from: me.id, fromName: me.name || me.phone, offer });
+  }
+  return pc;
+}
+
+function _onGroupPeerLeft(peerId) {
+  const pc = _groupPCs[peerId];
+  if (pc) { pc.close(); delete _groupPCs[peerId]; }
+  document.getElementById('gcall-audio-' + peerId)?.remove();
+  document.getElementById('gcall-peer-' + peerId)?.remove();
+  delete _groupPeerNames[peerId];
+  _updateGroupCallParticipants();
+}
+
+function _addGroupCallParticipant(peerId, peerName) {
+  const grid = document.getElementById('gcall-participants');
+  if (!grid || document.getElementById('gcall-peer-' + peerId)) return;
+  const div = document.createElement('div');
+  div.id = 'gcall-peer-' + peerId;
+  div.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px';
+  div.innerHTML = `<div style="position:relative"><div class="call-avatar-big" style="width:54px;height:54px;font-size:22px;animation:none">${(peerName||'?')[0].toUpperCase()}</div><div id="gcall-dot-${peerId}" style="position:absolute;bottom:2px;right:2px;width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.3);border:2px solid #000"></div></div><span style="font-size:11px;opacity:.8;max-width:60px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(peerName||'')}</span>`;
+  grid.appendChild(div);
+  _updateGroupCallParticipants();
+}
+
+function _updateGroupCallParticipants() {
+  const count = Object.keys(_groupPCs).length + 1; // +1 = moi
+  const el = document.getElementById('gcall-count');
+  if (el) el.textContent = count + ' participant' + (count>1?'s':'');
+}
+
+function toggleGroupMute() {
+  if (!_groupLocalStream) return;
+  _groupMuted = !_groupMuted;
+  _groupLocalStream.getAudioTracks().forEach(t => { t.enabled = !_groupMuted; });
+  const btn = document.getElementById('gcall-mute-btn');
+  if (btn) { btn.textContent = _groupMuted ? '🔇' : '🎙️'; btn.style.background = _groupMuted ? 'rgba(227,6,19,.4)' : 'rgba(255,255,255,.15)'; }
+}
+
+function leaveGroupCall() {
+  if (!_groupCallId) return;
+  socket.emit('groupCallLeave', { groupId: _groupCallId, userId: me.id });
+  _cleanupGroupCall();
+}
+
+function _cleanupGroupCall() {
+  clearInterval(_groupCallTimer); _groupCallSecs = 0; _groupMuted = false;
+  Object.values(_groupPCs).forEach(pc => pc.close()); _groupPCs = {}; _groupPeerNames = {};
+  if (_groupLocalStream) { _groupLocalStream.getTracks().forEach(t => t.stop()); _groupLocalStream = null; }
+  document.querySelectorAll('[id^="gcall-audio-"]').forEach(el => el.remove());
+  _groupCallId = null;
+  document.getElementById('group-call-overlay')?.remove();
+  document.getElementById('group-call-invite')?.remove();
+}
+
+function showGroupCallOverlay(groupName, peers) {
+  document.getElementById('group-call-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'group-call-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;color:#fff;font-family:Syne,sans-serif';
+  overlay.innerHTML = `
+    <div style="font-size:18px;font-weight:700">📞 ${escHtml(groupName)}</div>
+    <div id="gcall-count" style="font-size:13px;opacity:.7">1 participant</div>
+    <div id="gcall-participants" style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;max-width:320px;margin:8px 0">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div style="position:relative"><div class="call-avatar-big" style="width:54px;height:54px;font-size:22px">${(me?.name||'M')[0].toUpperCase()}</div><div style="position:absolute;bottom:2px;right:2px;width:12px;height:12px;border-radius:50%;background:var(--green);border:2px solid #000"></div></div>
+        <span style="font-size:11px;opacity:.8">Moi</span>
+      </div>
+    </div>
+    <div class="call-timer" id="gcall-timer">0:00</div>
+    <div class="call-actions">
+      <button class="call-action-btn mute" id="gcall-mute-btn" onclick="toggleGroupMute()" title="Muet">🎙️</button>
+      <button class="call-action-btn hangup" onclick="leaveGroupCall()" title="Quitter">📵</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  _groupCallSecs = 0;
+  _groupCallTimer = setInterval(() => { _groupCallSecs++; const el = document.getElementById('gcall-timer'); if (el) el.textContent = fmtDur(_groupCallSecs); }, 1000);
+  peers.forEach(p => _addGroupCallParticipant(p.id, p.peerName || p.userName));
+}
+
+function showGroupCallInvite(groupId, groupName, callerName) {
+  document.getElementById('group-call-invite')?.remove();
+  const div = document.createElement('div');
+  div.id = 'group-call-invite';
+  div.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px 20px;z-index:9997;box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:10px;min-width:260px;text-align:center';
+  div.innerHTML = `<div style="font-weight:700;font-size:15px">📞 Appel de groupe</div>
+    <div style="font-size:13px;color:var(--text2)">${escHtml(callerName)} a démarré un appel dans <b>${escHtml(groupName)}</b></div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button onclick="declineGroupCall('${escHtml(groupId)}')" style="flex:1;padding:10px;background:rgba(227,6,19,.1);color:#e30613;border:1px solid #e30613;border-radius:10px;font-size:14px;cursor:pointer;font-weight:600">📵 Refuser</button>
+      <button onclick="document.getElementById('group-call-invite').remove();joinGroupCall('${escHtml(groupId)}','${escHtml(groupName)}')" style="flex:1;padding:10px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:600">📞 Rejoindre</button>
+    </div>`;
+  document.body.appendChild(div);
+  setTimeout(() => div.remove(), 30000); // auto-dismiss 30s
+}
+
+function initGroupCallListeners() {
+  if (!socket) return;
+  socket.on('groupCallInvite', ({ groupId, callerId, callerName }) => {
+    // Trouver le nom du groupe (depuis la liste des chats ou currentChat)
+    const groupName = (currentChat?.isGroup && currentChat.groupId === groupId) ? currentChat.name : 'Groupe';
+    showGroupCallInvite(groupId, groupName, callerName);
+  });
+  socket.on('groupCallExisting', async ({ groupId, peers }) => {
+    for (const p of peers) {
+      await _createGroupPC(p.id, p.userName, groupId, true);
+      _addGroupCallParticipant(p.id, p.userName);
+    }
+  });
+  socket.on('groupCallNewPeer', async ({ groupId, peerId, peerName }) => {
+    await _createGroupPC(peerId, peerName, groupId, false);
+    _addGroupCallParticipant(peerId, peerName);
+  });
+  socket.on('groupCallOffer', async ({ groupId, from, fromName, offer }) => {
+    if (!_groupCallId) return;
+    const pc = await _createGroupPC(from, fromName, groupId, false);
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('groupCallAnswer', { groupId, to: from, from: me.id, answer });
+    _addGroupCallParticipant(from, fromName);
+  });
+  socket.on('groupCallAnswer', async ({ groupId, from, answer }) => {
+    const pc = _groupPCs[from];
+    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+  });
+  socket.on('groupCallIce', async ({ groupId, from, candidate }) => {
+    const pc = _groupPCs[from];
+    if (pc && candidate) try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+  });
+  socket.on('groupCallPeerLeft', ({ groupId, peerId }) => { _onGroupPeerLeft(peerId); });
+}
+
+// ════════════════════════════════════════════════════════════
 //  WEBRTC CALL  (audio P2P via Socket.io signaling)
 // ════════════════════════════════════════════════════════════
 const STUN = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
@@ -3113,6 +3302,7 @@ function showCallOverlay(state, peerName, peerId) {
 // ── Socket listeners (appelés après init socket) ─────────────
 function initCallListeners() {
   if (!socket) return;
+  initGroupCallListeners();
   socket.on('incomingCall', onIncomingCall);
   socket.on('callAnswered', async ({ answer }) => {
     if (_pc) {
