@@ -1594,7 +1594,7 @@ function openChat(contact) {
       <span class="search-count-badge" id="search-count-badge"></span>
       <button onclick="toggleMsgSearch()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
     </div>
-    <div class="messages-area scrollbar-custom" id="messages-area"></div>
+    <div class="messages-area scrollbar-custom" id="messages-area" ondragover="event.preventDefault();this.style.outline='2px dashed var(--green)'" ondragleave="this.style.outline=''" ondrop="event.preventDefault();this.style.outline='';handleDropFile(event)"></div>
     <div class="typing-indicator" id="typing-indicator"></div>
     <div class="reply-bar" id="reply-bar">
       <div class="reply-bar-inner">
@@ -2499,7 +2499,7 @@ async function onChatImageSelected(input) {
   reader.onload = async e => {
     const base64 = e.target.result.split(',')[1];
     try {
-      const up = await apiFetch('/products/upload-image', 'POST', { base64, mimeType: file.type, filename: 'chat_img' });
+      const up = await apiFetch('/upload/file', 'POST', { base64, mimeType: file.type, filename: file.name || 'chat_img' });
       if (up && up.url) await sendTypedMessage('image', up.url);
     } catch(err) { alert('Erreur upload : ' + err.message); }
     input.value = '';
@@ -2518,7 +2518,7 @@ async function handleDropFile(event) {
     reader.onload = async e => {
       const base64 = e.target.result.split(',')[1];
       try {
-        const up = await apiFetch('/products/upload-image', 'POST', { base64, mimeType: file.type, filename: 'chat_img' });
+        const up = await apiFetch('/upload/file', 'POST', { base64, mimeType: file.type, filename: file.name || 'chat_img' });
         if (up && up.url) await sendTypedMessage('image', up.url);
       } catch(err) { alert('Erreur upload : ' + err.message); }
     };
