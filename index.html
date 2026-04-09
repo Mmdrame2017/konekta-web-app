@@ -3160,28 +3160,58 @@ document.addEventListener('touchstart', () => _ensureAudioCtx());
 
 let _ringNode = null;
 function _startRing() {
-  if (_ringNode) return; // déjà en train de sonner
+  if (_ringNode) return;
   const ctx = _ensureAudioCtx();
   if (!ctx) return;
   let t = 0, running = true;
-  function beep() {
+  // Sonnerie double bip style téléphone
+  function doubleBip() {
     if (!running) return;
-    try {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.35, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.45);
-    } catch(e) {}
-    t = setTimeout(beep, 1600);
+    [0, 0.25].forEach(offset => {
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = 440;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0, ctx.currentTime + offset);
+        gain.gain.linearRampToValueAtTime(0.9, ctx.currentTime + offset + 0.05);
+        gain.gain.setValueAtTime(0.9, ctx.currentTime + offset + 0.15);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + offset + 0.22);
+        osc.start(ctx.currentTime + offset);
+        osc.stop(ctx.currentTime + offset + 0.23);
+      } catch(e) {}
+    });
+    t = setTimeout(doubleBip, 1200);
   }
-  beep();
+  doubleBip();
   _ringNode = { stop: () => { running = false; clearTimeout(t); _ringNode = null; } };
 }
 function _stopRing() {
   if (_ringNode) { _ringNode.stop(); }
+}
+
+// Lecture audio WebRTC via Web Audio API (contourne autoplay mobile)
+let _remoteAudioSrc = null;
+function _playRemoteStream(stream) {
+  // Essayer Web Audio API en premier (plus fiable sur mobile)
+  try {
+    const ctx = _ensureAudioCtx();
+    if (ctx) {
+      if (_remoteAudioSrc) { try { _remoteAudioSrc.disconnect(); } catch(e) {} }
+      _remoteAudioSrc = ctx.createMediaStreamSource(stream);
+      _remoteAudioSrc.connect(ctx.destination);
+      return;
+    }
+  } catch(e) {}
+  // Fallback : élément audio
+  const a = document.getElementById('call-audio');
+  if (a) { a.srcObject = stream; a.play().catch(() => {}); }
+}
+function _stopRemoteStream() {
+  if (_remoteAudioSrc) { try { _remoteAudioSrc.disconnect(); } catch(e) {} _remoteAudioSrc = null; }
+  const a = document.getElementById('call-audio');
+  if (a) { a.srcObject = null; }
 }
 
 function initGroupCallListeners() {
@@ -3243,9 +3273,7 @@ async function startCall(userId, userName) {
   _callPeer = { id: userId, name: userName };
   _pc = new RTCPeerConnection(STUN);
   _localStream.getTracks().forEach(t => _pc.addTrack(t, _localStream));
-  _pc.ontrack = e => {
-    if (audio && e.streams && e.streams[0]) { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); }
-  };
+  _pc.ontrack = e => { if (e.streams && e.streams[0]) _playRemoteStream(e.streams[0]); };
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: userId, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   const offer = await _pc.createOffer();
@@ -3273,10 +3301,7 @@ async function acceptCall() {
   } catch(e) { alert('Microphone indisponible : ' + e.message); declineCall(); return; }
   _pc = new RTCPeerConnection(STUN);
   _localStream.getTracks().forEach(t => _pc.addTrack(t, _localStream));
-  _pc.ontrack = e => {
-    const a = document.getElementById('call-audio');
-    if (a && e.streams && e.streams[0]) { a.srcObject = e.streams[0]; a.play().catch(() => {}); }
-  };
+  _pc.ontrack = e => { if (e.streams && e.streams[0]) _playRemoteStream(e.streams[0]); };
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: id, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   await _pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -3309,8 +3334,7 @@ function cleanupCall() {
   clearInterval(_callTimer); _callSecs = 0; _muted = false;
   if (_pc) { _pc.close(); _pc = null; }
   if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
-  const audio = document.getElementById('call-audio');
-  if (audio) { audio.srcObject = null; }
+  _stopRemoteStream();
   _callPeer = null;
   document.getElementById('call-overlay')?.remove();
 }
