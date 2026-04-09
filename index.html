@@ -617,7 +617,13 @@
         <!-- Chat List -->
         <div class="chat-list">
           <div class="chat-list-header">
-            <h3>Messages</h3>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <h3 style="margin-bottom:0">Messages</h3>
+              <div style="display:flex;gap:6px">
+                <button onclick="openNewChatModal()" title="Nouvelle conversation" style="background:var(--green);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700;line-height:1">+</button>
+                <button onclick="openNewGroupModal()" title="Créer un groupe" style="background:var(--wave);border:none;border-radius:50%;width:32px;height:32px;color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">👥</button>
+              </div>
+            </div>
             <div class="search-box">
               <span>🔍</span>
               <input type="text" id="search-phone" placeholder="Chercher par téléphone..." onkeydown="if(event.key==='Enter') searchContact()" oninput="filterChats()">
