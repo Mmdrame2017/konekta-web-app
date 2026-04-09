@@ -3194,19 +3194,23 @@ function _stopRing() {
 // Lecture audio WebRTC via Web Audio API (contourne autoplay mobile)
 let _remoteAudioSrc = null;
 function _playRemoteStream(stream) {
-  // Essayer Web Audio API en premier (plus fiable sur mobile)
+  // 1. Élément audio (méthode principale — seule garantie sur Android Chrome)
+  const a = document.getElementById('call-audio');
+  if (a) {
+    a.srcObject = stream;
+    a.volume = 1;
+    a.muted = false;
+    a.play().catch(() => {});
+  }
+  // 2. Web Audio API en parallèle (backup pour certains navigateurs)
   try {
     const ctx = _ensureAudioCtx();
     if (ctx) {
       if (_remoteAudioSrc) { try { _remoteAudioSrc.disconnect(); } catch(e) {} }
       _remoteAudioSrc = ctx.createMediaStreamSource(stream);
       _remoteAudioSrc.connect(ctx.destination);
-      return;
     }
   } catch(e) {}
-  // Fallback : élément audio
-  const a = document.getElementById('call-audio');
-  if (a) { a.srcObject = stream; a.play().catch(() => {}); }
 }
 function _stopRemoteStream() {
   if (_remoteAudioSrc) { try { _remoteAudioSrc.disconnect(); } catch(e) {} _remoteAudioSrc = null; }
