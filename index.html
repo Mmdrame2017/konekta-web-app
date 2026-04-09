@@ -1851,9 +1851,11 @@ async function showGroupInfo(groupId, groupName) {
     const addSection = iAmAdmin ? `
       <div style="padding:12px 0;border-bottom:1px solid var(--border)">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Ajouter un membre</div>
-        <div style="display:flex;gap:8px">
-          <input id="grp-add-phone" type="tel" placeholder="Numéro de téléphone" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
-          <button onclick="grpAddMember('${escHtml(groupId)}','${escHtml(groupName)}')" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:600">Ajouter</button>
+        <div style="position:relative">
+          <input id="grp-add-phone" type="tel" placeholder="Tapez un numéro..." autocomplete="off"
+            style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)"
+            oninput="grpSearchLive(this,'${escHtml(groupId)}','${escHtml(groupName)}')">
+          <div id="grp-add-dropdown" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:99;overflow:hidden"></div>
         </div>
         <div id="grp-add-msg" style="font-size:12px;margin-top:6px;color:var(--text2)"></div>
       </div>` : '';
@@ -1884,7 +1886,65 @@ async function showGroupInfo(groupId, groupName) {
   }
 }
 
+let _grpSearchTimer = null;
+async function grpSearchLive(input, groupId, groupName) {
+  const raw = input.value.trim();
+  const dd = document.getElementById('grp-add-dropdown');
+  const msgEl = document.getElementById('grp-add-msg');
+  if (!dd) return;
+  if (raw.length < 4) { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+  clearTimeout(_grpSearchTimer);
+  _grpSearchTimer = setTimeout(async () => {
+    const stripped = raw.replace(/\s/g, '');
+    const variants = [stripped];
+    if (stripped.startsWith('+')) variants.push(stripped.slice(1));
+    else if (/^\d{9}$/.test(stripped)) variants.push('+221'+stripped, '221'+stripped);
+    else if (/^\d{6,8}$/.test(stripped)) variants.push('+221'+stripped);
+    let found = null;
+    for (const v of variants) {
+      try { const u = await apiFetch('/users/search?phone=' + encodeURIComponent(v)); if (u && u.id && u.id !== me?.id) { found = u; break; } } catch(e) {}
+    }
+    if (found) {
+      const label = escHtml(found.name || '(sans nom)');
+      const phone = escHtml(normalizePhoneDisplay(found.phone || ''));
+      const initial = (found.name || found.phone || '?')[0].toUpperCase();
+      dd.style.display = 'block';
+      dd.innerHTML = `<div onclick="grpSelectMember('${escHtml(found.id)}','${escHtml(found.name||'')}','${escHtml(found.phone||'')}','${escHtml(groupId)}','${escHtml(groupName)}')"
+        style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;transition:background .15s"
+        onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background=''">
+        <div class="chat-avatar" style="width:36px;height:36px;font-size:14px;flex-shrink:0">${initial}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${label}</div>
+          <div style="font-size:11px;color:var(--text2)">${phone}</div>
+        </div>
+        <span style="font-size:11px;background:var(--green);color:#fff;border-radius:6px;padding:3px 8px">Ajouter</span>
+      </div>`;
+      if (msgEl) { msgEl.textContent = ''; }
+    } else {
+      dd.style.display = 'none'; dd.innerHTML = '';
+      if (msgEl && raw.length >= 9) { msgEl.textContent = 'Aucun utilisateur trouvé'; msgEl.style.color = 'var(--text2)'; }
+    }
+  }, 350);
+}
+
+async function grpSelectMember(userId, name, phone, groupId, groupName) {
+  const dd = document.getElementById('grp-add-dropdown');
+  const input = document.getElementById('grp-add-phone');
+  const msgEl = document.getElementById('grp-add-msg');
+  if (dd) { dd.style.display = 'none'; dd.innerHTML = ''; }
+  if (msgEl) { msgEl.textContent = 'Ajout en cours...'; msgEl.style.color = 'var(--text2)'; }
+  try {
+    await apiFetch(`/groups/${groupId}/members`, 'POST', { userId });
+    if (msgEl) { msgEl.textContent = `✅ ${name || phone} ajouté(e)`; msgEl.style.color = 'var(--green)'; }
+    if (input) input.value = '';
+    setTimeout(() => showGroupInfo(groupId, groupName), 700);
+  } catch(e) {
+    if (msgEl) { msgEl.textContent = 'Erreur : ' + e.message; msgEl.style.color = '#e74c3c'; }
+  }
+}
+
 async function grpAddMember(groupId, groupName) {
+  // fallback si utilisateur valide manuellement sans passer par l'autocomplete
   const raw = document.getElementById('grp-add-phone')?.value?.trim();
   const msgEl = document.getElementById('grp-add-msg');
   if (!raw) return;
@@ -1898,12 +1958,7 @@ async function grpAddMember(groupId, groupName) {
     try { const u = await apiFetch('/users/search?phone=' + encodeURIComponent(v)); if (u && u.id) { found = u; break; } } catch(e) {}
   }
   if (!found) { msgEl.textContent = 'Aucun utilisateur trouvé'; msgEl.style.color = '#e74c3c'; return; }
-  try {
-    await apiFetch(`/groups/${groupId}/members`, 'POST', { userId: found.id });
-    msgEl.textContent = `✅ ${found.name || found.phone} ajouté(e)`; msgEl.style.color = 'var(--green)';
-    document.getElementById('grp-add-phone').value = '';
-    setTimeout(() => showGroupInfo(groupId, groupName), 800);
-  } catch(e) { msgEl.textContent = 'Erreur : ' + e.message; msgEl.style.color = '#e74c3c'; }
+  await grpSelectMember(found.id, found.name, found.phone, groupId, groupName);
 }
 
 async function grpRemoveMember(groupId, groupName, userId, btn) {
