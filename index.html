@@ -476,6 +476,11 @@
   .lightbox.show { display:flex; }
   .lightbox img { max-width:95vw; max-height:90vh; border-radius:10px; object-fit:contain; }
 
+  /* ── GROUPS ── */
+  .chat-avatar.group-avatar { background: linear-gradient(135deg, #1B6FD8, #0d3d8a); }
+  .group-badge { font-size:10px; font-weight:700; background:rgba(27,111,216,.15); color:#1B6FD8; border:1px solid rgba(27,111,216,.3); border-radius:20px; padding:1px 6px; margin-left:4px; vertical-align:middle; }
+  .msg-sender-name { font-size:11px; font-weight:700; color:var(--green); margin-bottom:2px; display:block; }
+
   /* ── SEARCH BAR IN CHAT ── */
   .msg-search-bar {
     display:none; background:var(--card); border-bottom:1px solid var(--border);
@@ -621,7 +626,10 @@
             <div id="search-msg" style="font-size:12px;color:var(--text2);margin-top:6px;min-height:16px"></div>
           </div>
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
-          <button class="new-chat-btn" onclick="openNewChatModal()">+ Nouvelle conversation</button>
+          <div style="display:flex;gap:8px;margin:12px">
+            <button class="new-chat-btn" style="margin:0;flex:1" onclick="openNewChatModal()">+ Conversation</button>
+            <button class="new-chat-btn" style="margin:0;background:var(--wave);box-shadow:0 3px 12px rgba(27,111,216,.25)" onclick="openNewGroupModal()">👥 Groupe</button>
+          </div>
         </div>
 
         <!-- Chat View -->
@@ -970,6 +978,31 @@
   </div>
 </div>
 
+<!-- New Group -->
+<div class="modal-overlay" id="modal-new-group">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h3>👥 Créer un groupe</h3>
+      <button class="close-btn" onclick="closeModal('modal-new-group')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nom du groupe *</label>
+      <input type="text" id="new-group-name" placeholder="Ex: Famille, Équipe...">
+    </div>
+    <div class="form-group">
+      <label>Membres (cochez les contacts)</label>
+      <div id="group-members-list" style="max-height:220px;overflow-y:auto;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius);padding:8px;display:flex;flex-direction:column;gap:4px">
+        <div style="color:var(--text2);font-size:13px;padding:8px">Chargement des contacts...</div>
+      </div>
+    </div>
+    <p class="msg error" id="new-group-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-group')">Annuler</button>
+      <button class="btn btn-primary" onclick="createGroup()" id="create-group-btn">Créer le groupe</button>
+    </div>
+  </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <img id="lightbox-img" src="" alt="Image">
@@ -1141,10 +1174,10 @@ function showApp() {
   // Polling de secours (Socket.io serverless = pas de push)
   setInterval(() => {
     loadChats();
-    if (currentChat) loadMessages(currentChat);
+    if (currentChat) { if (currentChat.isGroup) loadGroupMessages(currentChat.groupId); else loadMessages(currentChat); }
   }, 8000);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { loadChats(); if (currentChat) loadMessages(currentChat); }
+    if (!document.hidden) { loadChats(); if (currentChat) { if (currentChat.isGroup) loadGroupMessages(currentChat.groupId); else loadMessages(currentChat); } }
   });
 }
 
@@ -1171,7 +1204,7 @@ function initSocket() {
   });
   socket.on('paymentReceived', (data) => {
     loadWallet();
-    if (currentChat) loadMessages(currentChat);
+    if (currentChat && !currentChat.isGroup) loadMessages(currentChat);
   });
 
   // Mise à jour temps réel de la marketplace
@@ -1390,6 +1423,26 @@ async function loadChats() {
       return;
     }
     el.innerHTML = data.map(chat => {
+      const previewMap = { payment: '💳 Paiement Wave', image: '📷 Photo', voice: '🎤 Vocal' };
+      const preview = previewMap[chat.type] || (chat.content || '…');
+      const time = chat.created_at ? new Date(chat.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+
+      if (chat.isGroup && chat.group_id) {
+        // ── Groupe ──
+        const groupName = chat.group_name || 'Groupe';
+        const safeGid = escHtml(chat.group_id);
+        const safeGname = escHtml(groupName);
+        return `<div class="chat-item" onclick="openGroupChat('${chat.group_id}', ${JSON.stringify(groupName)})" data-group="${safeGid}">
+          <div class="chat-avatar group-avatar">👥</div>
+          <div class="chat-item-info">
+            <div class="chat-item-name">${safeGname} <span class="group-badge">groupe</span></div>
+            <div class="chat-item-last">${escHtml(preview.substring(0,42))}</div>
+          </div>
+          <div style="font-size:11px;color:var(--text2);flex-shrink:0;margin-left:4px">${time}</div>
+        </div>`;
+      }
+
+      // ── 1-1 ──
       const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
       const savedName = getContactName(otherId);
       const knownUser = usersById[otherId] || chat.other || {};
@@ -1398,9 +1451,6 @@ async function loadChats() {
       const displayName = savedName || serverName || (otherId.slice(0,8) + '…');
       chatContacts[otherId] = { userId: otherId, name: displayName, phone: serverPhone };
       const initials = (displayName||'?').charAt(0).toUpperCase();
-      const previewMap = { payment: '💳 Paiement Wave', image: '📷 Photo', voice: '🎤 Vocal' };
-      const preview = previewMap[chat.type] || (chat.content || '…');
-      const time = chat.created_at ? new Date(chat.created_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
       return `<div class="chat-item" onclick="openChatById('${otherId}')" data-other="${otherId}">
         <div class="chat-avatar">${initials}</div>
         <div class="chat-item-info">
@@ -1566,7 +1616,7 @@ async function loadMessages(contact) {
   } catch(e) {}
 }
 
-function appendMessage(msg, isHistory=false) {
+function appendMessage(msg, isHistory=false, isGroup=false) {
   const area = document.getElementById('messages-area');
   if (!area) return;
   if (!isHistory) {
@@ -1606,22 +1656,29 @@ function appendMessage(msg, isHistory=false) {
     displayContent = rm[3].trim();
   }
 
+  // Sender name (group messages, received only)
+  let senderNameHtml = '';
+  if (isGroup && !isSent) {
+    const senderLabel = msg.sender?.name || msg.sender?.phone || (msg.sender_id || '').slice(0,8) || 'Membre';
+    senderNameHtml = `<span class="msg-sender-name">${escHtml(senderLabel)}</span>`;
+  }
+
   // Build inner content
   let innerHtml = '';
   if (msg.type === 'image') {
-    innerHtml = `${replyHtml}<img class="msg-img" src="${escHtml(msg.content||'')}" alt="Photo" onclick="openLightbox('${escHtml(msg.content||'')}')">`;
+    innerHtml = `${senderNameHtml}${replyHtml}<img class="msg-img" src="${escHtml(msg.content||'')}" alt="Photo" onclick="openLightbox('${escHtml(msg.content||'')}')">`;
   } else if (msg.type === 'voice') {
     const bars = Array.from({length:18}, (_,i) => {
       const h = 5 + Math.abs(Math.sin(i * 0.9 + 1.2) * 10 + Math.sin(i*1.7)*5);
       return `<div class="vbar" style="height:${Math.round(h)}px"></div>`;
     }).join('');
-    innerHtml = `${replyHtml}<div class="voice-bubble">
+    innerHtml = `${senderNameHtml}${replyHtml}<div class="voice-bubble">
       <button class="voice-play" onclick="playVoice(this,'${escHtml(msg.content||'')}')">▶</button>
       <div class="voice-bars">${bars}</div>
       <span class="voice-dur">0:00</span>
     </div>`;
   } else {
-    innerHtml = `${replyHtml}${escHtml(displayContent)}`;
+    innerHtml = `${senderNameHtml}${replyHtml}${escHtml(displayContent)}`;
   }
 
   // Read receipts (sent only)
@@ -1658,6 +1715,8 @@ function appendMessage(msg, isHistory=false) {
 
 async function sendMessage() {
   if (!currentChat) return;
+  if (currentChat.isGroup) { sendGroupMessage(); return; }
+
   const input = document.getElementById('chat-input');
   const content = input.value.trim();
   if (!content) return;
@@ -1678,6 +1737,131 @@ async function sendMessage() {
     if (socket) socket.emit('sendMessage', { ...msg, receiverId: currentChat.userId });
     loadChats();
   } catch(e) {}
+}
+
+// ════════════════════════════════════════════════════════════
+//  GROUPS
+// ════════════════════════════════════════════════════════════
+async function openGroupChat(groupId, groupName) {
+  currentChat = { groupId, name: groupName, isGroup: true };
+  document.getElementById('chat-badge').classList.remove('show');
+  _replyTo = null;
+
+  const layout = document.querySelector('.chat-layout');
+  if (layout) layout.classList.add('chat-open');
+
+  document.querySelectorAll('.chat-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.group === groupId);
+  });
+
+  const view = document.getElementById('chat-view');
+  view.innerHTML = `
+    <div class="chat-header">
+      <button class="back-btn-mobile" onclick="closeChatMobile()" title="Retour">←</button>
+      <div class="chat-avatar group-avatar" style="width:38px;height:38px;font-size:15px">👥</div>
+      <div class="chat-header-info">
+        <div class="chat-header-name">${escHtml(groupName)} <span class="group-badge">groupe</span></div>
+        <div class="chat-header-status" id="chat-status">Conversation de groupe</div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="icon-btn" onclick="toggleMsgSearch()" title="Rechercher">🔍</button>
+      </div>
+    </div>
+    <div class="msg-search-bar" id="msg-search-bar">
+      <input type="text" id="msg-search-input" placeholder="Rechercher dans la conversation..." oninput="filterMessages(this.value)">
+      <span class="search-count-badge" id="search-count-badge"></span>
+      <button onclick="toggleMsgSearch()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2)">✕</button>
+    </div>
+    <div class="messages-area scrollbar-custom" id="messages-area"></div>
+    <div class="typing-indicator" id="typing-indicator"></div>
+    <div class="reply-bar" id="reply-bar">
+      <div class="reply-bar-inner">
+        <div class="reply-bar-text">
+          <span class="reply-bar-name" id="reply-bar-name"></span>
+          <span class="reply-bar-preview" id="reply-bar-preview"></span>
+        </div>
+        <button class="reply-bar-close" onclick="clearReply()">✕</button>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <button class="attach-btn" onclick="document.getElementById('chat-img-input').click()" title="Joindre une image">📎</button>
+      <textarea class="chat-input scrollbar-custom" id="chat-input" placeholder="Message au groupe..." rows="1"
+        onkeydown="handleInputKey(event)" oninput="handleTyping()"></textarea>
+      <button class="send-btn" onclick="sendMessage()">➤</button>
+    </div>
+  `;
+  loadGroupMessages(groupId);
+}
+
+async function loadGroupMessages(groupId) {
+  try {
+    const data = await apiFetch(`/groups/${groupId}/messages`);
+    const area = document.getElementById('messages-area');
+    if (!area) return;
+    if (!data || !data.length) {
+      area.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px;font-size:13px">Commencez la conversation de groupe 👋</div>';
+      return;
+    }
+    area.innerHTML = '';
+    data.forEach(msg => appendMessage(msg, true, true));
+    area.scrollTop = area.scrollHeight;
+  } catch(e) {}
+}
+
+async function sendGroupMessage() {
+  if (!currentChat || !currentChat.isGroup) return;
+  const input = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  const msg = { type: 'text', content, sender_id: me.id, created_at: new Date().toISOString(), sender: { name: me.name, phone: me.phone } };
+  appendMessage(msg, false, true);
+  try {
+    await apiFetch(`/groups/${currentChat.groupId}/messages`, 'POST', { type: 'text', content });
+    loadChats();
+  } catch(e) {}
+}
+
+function openNewGroupModal() {
+  document.getElementById('new-group-name').value = '';
+  document.getElementById('new-group-msg').textContent = '';
+  // Remplir la liste des membres depuis usersById
+  const listEl = document.getElementById('group-members-list');
+  const users = Object.values(usersById).filter(u => u.id !== me.id);
+  if (!users.length) {
+    listEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">Aucun utilisateur disponible</div>';
+  } else {
+    listEl.innerHTML = users.map(u => {
+      const label = u.name || u.phone || u.id.slice(0,8);
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;transition:.15s" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">\
+        <input type="checkbox" value="${escHtml(u.id)}" style="width:16px;height:16px;accent-color:var(--green)">\
+        <div class="chat-avatar" style="width:32px;height:32px;font-size:13px;flex-shrink:0">${(label).charAt(0).toUpperCase()}</div>\
+        <div style="font-size:14px;font-weight:500">${escHtml(label)}</div>\
+      </label>`;
+    }).join('');
+  }
+  openModal('modal-new-group');
+}
+
+async function createGroup() {
+  const name = document.getElementById('new-group-name').value.trim();
+  if (!name) { document.getElementById('new-group-msg').textContent = 'Nom du groupe requis'; return; }
+  const checked = [...document.querySelectorAll('#group-members-list input[type=checkbox]:checked')];
+  const memberIds = checked.map(cb => cb.value);
+  if (!memberIds.length) { document.getElementById('new-group-msg').textContent = 'Sélectionnez au moins un membre'; return; }
+  const btn = document.getElementById('create-group-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
+  try {
+    const result = await apiFetch('/groups', 'POST', { name, memberIds });
+    closeModal('modal-new-group');
+    loadChats();
+    if (result && result.id) openGroupChat(result.id, name);
+  } catch(e) {
+    document.getElementById('new-group-msg').textContent = e.message || 'Erreur lors de la création';
+  }
+  btn.disabled = false; btn.textContent = 'Créer le groupe';
 }
 
 function handleInputKey(e) {
@@ -2416,6 +2600,15 @@ function filterMessages(query) {
 // ════════════════════════════════════════════════════════════
 async function sendTypedMessage(type, content) {
   if (!currentChat) return;
+  if (currentChat.isGroup) {
+    const msg = { type, content, sender_id: me.id, created_at: new Date().toISOString(), sender: { name: me.name, phone: me.phone } };
+    appendMessage(msg, false, true);
+    try {
+      await apiFetch(`/groups/${currentChat.groupId}/messages`, 'POST', { type, content });
+      loadChats();
+    } catch(e) { console.error('sendTypedMessage group', e); }
+    return;
+  }
   const chatId = getChatId(me.id, currentChat.userId);
   const msg = { chatId, receiverId: currentChat.userId, type, content, sender_id: me.id, created_at: new Date().toISOString() };
   appendMessage(msg, false);
