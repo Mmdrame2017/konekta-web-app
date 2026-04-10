@@ -306,7 +306,16 @@
     background:linear-gradient(135deg, #0a2e1a 0%, var(--green) 100%);
     display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:700;
     margin:0 auto 12px; box-shadow:0 4px 20px rgba(0,168,84,.3); color:#fff;
+    position:relative; cursor:pointer; overflow:hidden; background-size:cover; background-position:center;
   }
+  .profile-avatar .cam-overlay {
+    position:absolute; bottom:0; left:0; right:0; height:28px;
+    background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center;
+    font-size:14px; color:#fff; transition:.2s;
+  }
+  .profile-avatar:hover .cam-overlay { background:rgba(0,0,0,.7); }
+  .avatar-sm[style*="background-image"] { font-size:0; }
+  .chat-avatar[style*="background-image"] { font-size:0; background-size:cover; background-position:center; }
   .profile-name { font-family:'Syne',sans-serif; font-size:20px; font-weight:700; }
   .profile-phone { font-size:14px; color:var(--text2); margin-top:4px; }
   .profile-section { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:16px; }
@@ -710,7 +719,8 @@
     <div class="tab-content scrollbar-custom" id="tab-profile" style="flex-direction:column">
       <div class="profile-content scrollbar-custom">
         <div class="profile-hero">
-          <div class="profile-avatar" id="profile-avatar-big">K</div>
+          <div class="profile-avatar" id="profile-avatar-big" onclick="document.getElementById('avatar-input').click()">K<div class="cam-overlay">📷</div></div>
+          <input type="file" id="avatar-input" accept="image/*" style="display:none" onchange="onAvatarSelected(this)">
           <div class="profile-name" id="profile-name-big">Chargement...</div>
           <div class="profile-phone" id="profile-phone-big">—</div>
         </div>
@@ -1287,15 +1297,52 @@ async function loadProfile() {
     const data = await apiFetch('/users/me');
     me = { ...me, ...data };
     localStorage.setItem('knk_user', JSON.stringify(me));
-    const initial = (me.name || me.phone || 'K').charAt(0).toUpperCase();
-    document.getElementById('user-avatar').textContent = initial;
-    document.getElementById('profile-avatar-big').textContent = initial;
+    _updateMyAvatarDisplay();
     document.getElementById('profile-name-big').textContent = me.name || '(sans nom)';
     document.getElementById('profile-phone-big').textContent = me.phone || '—';
     const waveDisplay = document.getElementById('profile-wave-display');
     if (waveDisplay) waveDisplay.textContent = me.wave_phone || 'Non configuré';
   } catch(e) {}
   loadSolde();
+}
+
+// Met à jour tous les affichages avatar de l'utilisateur courant
+function _updateMyAvatarDisplay() {
+  const initial = (me.name || me.phone || 'K').charAt(0).toUpperCase();
+  const avatarSm = document.getElementById('user-avatar');
+  const avatarBig = document.getElementById('profile-avatar-big');
+  if (me.avatar) {
+    if (avatarSm) { avatarSm.style.backgroundImage = `url('${me.avatar}')`; avatarSm.style.backgroundSize = 'cover'; avatarSm.style.backgroundPosition = 'center'; avatarSm.textContent = ''; }
+    if (avatarBig) { avatarBig.style.backgroundImage = `url('${me.avatar}')`; avatarBig.style.backgroundSize = 'cover'; avatarBig.style.backgroundPosition = 'center'; avatarBig.childNodes[0].textContent = ''; }
+  } else {
+    if (avatarSm) { avatarSm.style.backgroundImage = ''; avatarSm.textContent = initial; }
+    if (avatarBig) { avatarBig.style.backgroundImage = ''; avatarBig.childNodes[0].textContent = initial; }
+  }
+}
+
+// Upload photo de profil
+async function onAvatarSelected(input) {
+  const file = input.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 5 * 1024 * 1024) { alert('Image trop lourde (max 5 Mo)'); return; }
+  const avatarBig = document.getElementById('profile-avatar-big');
+  if (avatarBig) avatarBig.childNodes[0].textContent = '⏳';
+  try {
+    const base64 = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result.split(',')[1]);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+    const result = await apiFetch('/upload/avatar', 'POST', { base64, mimeType: file.type });
+    me.avatar = result.url;
+    localStorage.setItem('knk_user', JSON.stringify(me));
+    _updateMyAvatarDisplay();
+  } catch(e) {
+    alert('Erreur upload : ' + (e.message || 'réessayez'));
+    _updateMyAvatarDisplay();
+  }
+  input.value = '';
 }
 
 let _soldeInterval = null;
@@ -1463,6 +1510,18 @@ async function saveWavePhone() {
 // ════════════════════════════════════════════════════════════
 //  CHAT
 // ════════════════════════════════════════════════════════════
+
+// Helper : génère un avatar HTML (image ou initiale)
+function _avatarHtml(name, avatarUrl, size) {
+  const sz = size || '';
+  const initial = (name || '?').charAt(0).toUpperCase();
+  const sizeStyle = sz ? `width:${sz}px;height:${sz}px;font-size:${Math.round(sz*0.4)}px;` : '';
+  if (avatarUrl) {
+    return `<div class="chat-avatar" style="${sizeStyle}background-image:url('${escHtml(avatarUrl)}');background-size:cover;background-position:center;font-size:0"></div>`;
+  }
+  return `<div class="chat-avatar" style="${sizeStyle}">${initial}</div>`;
+}
+
 function getChatId(a, b) {
   return [a, b].sort().join('_');
 }
@@ -1502,10 +1561,10 @@ async function loadChats() {
       const serverPhone = knownUser.phone || '';
       const serverName = knownUser.name || serverPhone || null;
       const displayName = savedName || serverName || (otherId.slice(0,8) + '…');
-      chatContacts[otherId] = { userId: otherId, name: displayName, phone: serverPhone };
-      const initials = (displayName||'?').charAt(0).toUpperCase();
+      const otherAvatar = knownUser.avatar || null;
+      chatContacts[otherId] = { userId: otherId, name: displayName, phone: serverPhone, avatar: otherAvatar };
       return `<div class="chat-item" onclick="openChatById('${otherId}')" data-other="${otherId}">
-        <div class="chat-avatar">${initials}</div>
+        ${_avatarHtml(displayName, otherAvatar)}
         <div class="chat-item-info">
           <div class="chat-item-name">${escHtml(displayName)}</div>
           <div class="chat-item-last">${escHtml(preview.substring(0,42))}</div>
@@ -1607,7 +1666,7 @@ function openChat(contact) {
   view.innerHTML = `
     <div class="chat-header">
       <button class="back-btn-mobile" onclick="closeChatMobile()" title="Retour">←</button>
-      <div class="chat-avatar" style="width:38px;height:38px;font-size:15px">${initials}</div>
+      ${_avatarHtml(displayName, contact.avatar, 38)}
       <div class="chat-header-info">
         <div class="chat-header-name">${escHtml(displayName)}</div>
         <div class="chat-header-status" id="chat-status">${escHtml(contact.phone || '')}</div>
