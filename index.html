@@ -933,18 +933,33 @@
       <label>Catégorie</label>
       <select id="prod-category" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
         <option value="">— Choisir —</option>
-        <option value="Électronique">📱 Électronique</option>
-        <option value="Véhicules">🚗 Véhicules</option>
+        <option value="Électronique">📱 Électronique & Multimédia</option>
+        <option value="Véhicules">🚗 Véhicules & Motos</option>
         <option value="Immobilier">🏠 Immobilier</option>
         <option value="Mode">👗 Mode & Vêtements</option>
-        <option value="Maison">🪑 Maison & Jardin</option>
+        <option value="Maison">🪑 Maison & Électroménager</option>
         <option value="Alimentation">🍎 Alimentation</option>
-        <option value="Services">🔧 Services</option>
+        <option value="Services">🔧 Services & Emploi</option>
         <option value="Sport">⚽ Sport & Loisirs</option>
         <option value="Beauté">💄 Beauté & Santé</option>
-        <option value="Éducation">📚 Éducation</option>
+        <option value="Éducation">📚 Éducation & Livres</option>
+        <option value="Animaux">🐾 Animaux</option>
         <option value="Autre">📦 Autre</option>
       </select>
+    </div>
+    <div class="form-group">
+      <label>Localisation</label>
+      <input type="text" id="prod-location" list="locations-list" placeholder="Ex: Plateau, Dakar" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);box-sizing:border-box">
+      <datalist id="locations-list">
+        <option value="Plateau, Dakar"><option value="Almadies, Dakar"><option value="Médina, Dakar">
+        <option value="Mermoz, Dakar"><option value="Sacré-Cœur, Dakar"><option value="Ouakam, Dakar">
+        <option value="Ngor, Dakar"><option value="Yoff, Dakar"><option value="Fann, Dakar">
+        <option value="HLM, Dakar"><option value="Grand-Dakar"><option value="Parcelles Assainies">
+        <option value="Guédiawaye"><option value="Pikine"><option value="Rufisque">
+        <option value="Mbour"><option value="Thiès"><option value="Saint-Louis">
+        <option value="Ziguinchor"><option value="Kaolack"><option value="Touba">
+        <option value="Saly"><option value="Somone"><option value="Diamniadio">
+      </datalist>
     </div>
     <div class="form-group">
       <label>Photo du produit</label>
@@ -2394,7 +2409,7 @@ async function initWavePayment() {
 // ════════════════════════════════════════════════════════════
 //  MARKETPLACE
 // ════════════════════════════════════════════════════════════
-const CATEGORY_ICONS = { 'Électronique':'📱', 'Véhicules':'🚗', 'Immobilier':'🏠', 'Mode':'👗', 'Maison':'🪑', 'Alimentation':'🍎', 'Services':'🔧', 'Sport':'⚽', 'Beauté':'💄', 'Éducation':'📚', 'Autre':'📦' };
+const CATEGORY_ICONS = { 'Électronique':'📱', 'Véhicules':'🚗', 'Immobilier':'🏠', 'Mode':'👗', 'Maison':'🪑', 'Alimentation':'🍎', 'Services':'🔧', 'Sport':'⚽', 'Beauté':'💄', 'Éducation':'📚', 'Animaux':'🐾', 'Autre':'📦' };
 let _mktCategory = '';
 
 async function loadProducts() {
@@ -2433,6 +2448,7 @@ function filterProducts() {
     (p.name || '').toLowerCase().includes(query) ||
     (p.description || '').toLowerCase().includes(query) ||
     (p.category || '').toLowerCase().includes(query) ||
+    (p.location || '').toLowerCase().includes(query) ||
     (p.seller?.name || '').toLowerCase().includes(query)
   );
   // Trier
@@ -2447,6 +2463,7 @@ function _renderProducts(data) {
     grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🔍</div><p>Aucun produit trouvé</p></div>';
     return;
   }
+  const now = Date.now();
   grid.innerHTML = data.map(p => {
     const isMine = p.seller_id === me.id;
     const isUrl = p.image && p.image.startsWith('http');
@@ -2456,23 +2473,34 @@ function _renderProducts(data) {
       : `<span style="font-size:36px">${p.image || '📦'}</span>`;
     const sellerName = p.seller?.name || p.seller?.phone || 'Vendeur';
     const pid = p.id;
+    const sellerId = p.seller_id;
+    // Badge Nouveau (< 48h)
+    const isNew = p.created_at && (now - new Date(p.created_at).getTime()) < 48 * 3600 * 1000;
+    const newBadge = isNew ? '<span style="position:absolute;top:8px;left:8px;background:#e30613;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;z-index:1">Nouveau</span>' : '';
+    // Catégorie
     const catBadge = p.category ? `<span style="font-size:10px;background:var(--green-light);color:var(--green-dark);padding:2px 6px;border-radius:10px;font-weight:600">${CATEGORY_ICONS[p.category]||'🏷️'} ${escHtml(p.category)}</span>` : '';
-    const cardClick  = isMine ? "openEditProductModal('" + pid + "')" : "openBuyModal('" + pid + "')";
-    const actionBtn  = isMine
+    // Localisation
+    const locLine = p.location ? `<div style="font-size:10px;color:var(--text2);margin-top:2px">📍 ${escHtml(p.location)}</div>` : '';
+    // Temps relatif
+    const ago = _timeAgo(p.created_at);
+    // Actions
+    const cardClick = isMine ? "openEditProductModal('" + pid + "')" : "showProductDetail('" + pid + "')";
+    const actionBtn = isMine
       ? "<button class='product-buy-btn' style='background:var(--bg3);color:var(--text1);border:1px solid var(--border)' onclick='event.stopPropagation();openEditProductModal(\"" + pid + "\")'>✏️ Modifier</button>"
       : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>Acheter</button>";
     return `<div class="product-card" onclick="${cardClick}">
-      <div class="product-img" style="${isUrl?'padding:0;overflow:hidden':''}">${imgContent}</div>
+      <div class="product-img" style="position:relative;${isUrl?'padding:0;overflow:hidden':''}">${newBadge}${imgContent}</div>
       <div class="product-info">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
           <div class="product-name" style="flex:1">${escHtml(p.name)}</div>
           ${catBadge}
         </div>
         <div class="product-desc">${escHtml(p.description || '')}</div>
+        ${locLine}
         <div class="product-footer">
           <div>
             <div class="product-price">${p.price.toLocaleString()} F</div>
-            <div class="product-seller">${escHtml(sellerName)}</div>
+            <div class="product-seller">${escHtml(sellerName)} · ${ago}</div>
           </div>
           ${actionBtn}
         </div>
@@ -2481,11 +2509,63 @@ function _renderProducts(data) {
   }).join('');
 }
 
+function _timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return m + ' min';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + ' h';
+  const d = Math.floor(h / 24);
+  if (d < 30) return d + ' j';
+  return Math.floor(d / 30) + ' mois';
+}
+
+// ── Vue détaillée produit ──────────────────────────────────
+function showProductDetail(productId) {
+  const p = (window._products || []).find(x => x.id === productId);
+  if (!p) return;
+  const isUrl = p.image && p.image.startsWith('http');
+  const sellerName = p.seller?.name || p.seller?.phone || 'Vendeur';
+  const sellerId = p.seller_id;
+  const sellerAvatar = p.seller?.avatar;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.style.zIndex = '1001';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div class="modal" style="max-width:480px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <h3 style="font-size:15px">${escHtml(p.name)}</h3>
+      <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    ${isUrl ? `<img src="${p.image}" style="width:100%;max-height:280px;object-fit:cover;border-radius:12px;margin-bottom:12px">` : `<div style="text-align:center;font-size:64px;margin:16px 0">${p.image || '📦'}</div>`}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:22px;font-weight:800;color:var(--green);font-family:'Syne',sans-serif">${p.price.toLocaleString()} F CFA</div>
+      ${p.category ? `<span style="font-size:11px;background:var(--green-light);color:var(--green-dark);padding:3px 8px;border-radius:10px;font-weight:600">${CATEGORY_ICONS[p.category]||''} ${escHtml(p.category)}</span>` : ''}
+    </div>
+    ${p.description ? `<p style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5">${escHtml(p.description)}</p>` : ''}
+    ${p.location ? `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">📍 ${escHtml(p.location)}</div>` : ''}
+    <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg2);border-radius:12px;margin-bottom:16px">
+      ${sellerAvatar ? `<div style="width:40px;height:40px;border-radius:50%;background-image:url('${escHtml(sellerAvatar)}');background-size:cover;background-position:center;flex-shrink:0"></div>` : `<div style="width:40px;height:40px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;flex-shrink:0">${(sellerName[0]||'V').toUpperCase()}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px">${escHtml(sellerName)}</div>
+        <div style="font-size:11px;color:var(--text2)">${_timeAgo(p.created_at) ? 'Publié il y a ' + _timeAgo(p.created_at) : ''}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" style="flex:1" onclick="this.closest('.modal-overlay').remove();openChat({userId:'${sellerId}',name:'${escHtml(sellerName).replace(/'/g,"\\'")}',phone:'',avatar:${sellerAvatar ? "'"+escHtml(sellerAvatar)+"'" : 'null'}});switchTab('chat')">💬 Contacter</button>
+      <button class="btn btn-primary" style="flex:1" onclick="this.closest('.modal-overlay').remove();openBuyModal('${p.id}')">💳 Acheter</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+
 function openAddProductModal() {
   document.getElementById('prod-name').value = '';
   document.getElementById('prod-desc').value = '';
   document.getElementById('prod-price').value = '';
   document.getElementById('prod-category').value = '';
+  document.getElementById('prod-location').value = '';
   document.getElementById('prod-emoji').value = '📦';
   document.getElementById('prod-msg').textContent = '';
   openModal('modal-add-product');
@@ -2529,7 +2609,8 @@ async function addProduct() {
       image = up.url;
     }
     const category = document.getElementById('prod-category').value;
-    await apiFetch('/products', 'POST', { name, description, price: parseInt(price), image, category: category || null });
+    const location = document.getElementById('prod-location').value.trim();
+    await apiFetch('/products', 'POST', { name, description, price: parseInt(price), image, category: category || null, location: location || null });
     // Reset
     _prodPhotoBase64 = null; _prodPhotoMime = null;
     document.getElementById('prod-photo-img').style.display = 'none';
