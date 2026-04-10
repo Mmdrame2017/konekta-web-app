@@ -235,7 +235,7 @@
   }
   .mkt-cat-btn:hover { border-color:var(--green); color:var(--green); }
   .mkt-cat-btn.active { background:var(--green); color:#fff; border-color:var(--green); }
-  .products-grid { flex:1; overflow-y:auto; padding:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; align-content:start; }
+  .products-grid { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:16px; padding-bottom:80px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; align-content:start; }
   .product-card {
     background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
     overflow:hidden; transition:.25s; cursor:pointer; box-shadow:var(--shadow);
