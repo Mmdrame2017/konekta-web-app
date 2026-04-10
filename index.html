@@ -1604,7 +1604,7 @@ async function searchContact() {
       msg.textContent = '';
       document.getElementById('search-phone').value = '';
       filterChats();
-      openChat({ userId: data.id, name: data.name || data.phone, phone: data.phone });
+      openChat({ userId: data.id, name: data.name || data.phone, phone: data.phone, avatar: data.avatar || null });
     } else {
       msg.textContent = '❌ Aucun compte trouvé pour ce numéro';
     }
@@ -1634,7 +1634,7 @@ async function startChat() {
   } else {
     // Open chat
     closeModal('modal-new-chat');
-    openChat({ userId: foundContact.id, name: foundContact.name || foundContact.phone, phone: foundContact.phone });
+    openChat({ userId: foundContact.id, name: foundContact.name || foundContact.phone, phone: foundContact.phone, avatar: foundContact.avatar || null });
     foundContact = null;
   }
 }
