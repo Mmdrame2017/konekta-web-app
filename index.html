@@ -3524,11 +3524,26 @@ async function switchCamera() {
   if (!_localStream || !_isVideoCall) return;
   const currentTrack = _localStream.getVideoTracks()[0];
   if (!currentTrack) return;
-  const currentFacing = currentTrack.getSettings().facingMode || 'user';
-  const newFacing = currentFacing === 'user' ? 'environment' : 'user';
   try {
-    const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newFacing, width: { ideal: 640 }, height: { ideal: 480 } } });
-    const newTrack = newStream.getVideoTracks()[0];
+    // Méthode 1 : essayer facingMode opposé
+    const currentFacing = currentTrack.getSettings().facingMode || 'user';
+    const newFacing = currentFacing === 'user' ? 'environment' : 'user';
+    let newTrack = null;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: newFacing }, width: { ideal: 640 }, height: { ideal: 480 } } });
+      newTrack = s.getVideoTracks()[0];
+    } catch(e1) {
+      // Méthode 2 : énumérer les caméras et prendre la suivante
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(d => d.kind === 'videoinput');
+      if (cameras.length < 2) return; // une seule caméra
+      const currentId = currentTrack.getSettings().deviceId;
+      const currentIdx = cameras.findIndex(c => c.deviceId === currentId);
+      const nextCam = cameras[(currentIdx + 1) % cameras.length];
+      const s = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: nextCam.deviceId }, width: { ideal: 640 }, height: { ideal: 480 } } });
+      newTrack = s.getVideoTracks()[0];
+    }
+    if (!newTrack) return;
     const sender = _pc.getSenders().find(s => s.track?.kind === 'video');
     if (sender) await sender.replaceTrack(newTrack);
     currentTrack.stop();
