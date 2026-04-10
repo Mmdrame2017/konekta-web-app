@@ -227,6 +227,13 @@
   /* ── MARKETPLACE ── */
   .marketplace-header { padding:16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--card); }
   .marketplace-header h3 { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; }
+  .mkt-cat-btn {
+    flex-shrink:0; padding:6px 14px; border-radius:20px; border:1px solid var(--border);
+    background:var(--bg); color:var(--text2); font-size:12px; font-weight:600; cursor:pointer; transition:.15s;
+    white-space:nowrap;
+  }
+  .mkt-cat-btn:hover { border-color:var(--green); color:var(--green); }
+  .mkt-cat-btn.active { background:var(--green); color:#fff; border-color:var(--green); }
   .products-grid { flex:1; overflow-y:auto; padding:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; align-content:start; }
   .product-card {
     background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
@@ -715,6 +722,19 @@
         <h3>🛍️ Marketplace</h3>
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="openAddProductModal()">+ Vendre</button>
       </div>
+      <div style="padding:8px 16px 0;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px">
+          <input type="text" id="mkt-search" placeholder="🔍 Rechercher un produit..." oninput="filterProducts()" style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text)">
+          <select id="mkt-sort" onchange="filterProducts()" style="padding:8px;border:1px solid var(--border);border-radius:10px;font-size:12px;background:var(--bg);color:var(--text);cursor:pointer">
+            <option value="recent">Plus récent</option>
+            <option value="price-asc">Prix ↑</option>
+            <option value="price-desc">Prix ↓</option>
+          </select>
+        </div>
+        <div id="mkt-categories" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+          <button class="mkt-cat-btn active" data-cat="" onclick="selectCategory(this)">Tout</button>
+        </div>
+      </div>
       <div class="products-grid scrollbar-custom" id="products-grid">
         <div class="empty-state" style="grid-column:1/-1">
           <div class="icon">🛒</div>
@@ -896,6 +916,23 @@
     <div class="form-group">
       <label>Prix (FCFA) *</label>
       <input type="number" id="prod-price" placeholder="Ex: 350000" min="100">
+    </div>
+    <div class="form-group">
+      <label>Catégorie</label>
+      <select id="prod-category" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="">— Choisir —</option>
+        <option value="Électronique">📱 Électronique</option>
+        <option value="Véhicules">🚗 Véhicules</option>
+        <option value="Immobilier">🏠 Immobilier</option>
+        <option value="Mode">👗 Mode & Vêtements</option>
+        <option value="Maison">🪑 Maison & Jardin</option>
+        <option value="Alimentation">🍎 Alimentation</option>
+        <option value="Services">🔧 Services</option>
+        <option value="Sport">⚽ Sport & Loisirs</option>
+        <option value="Beauté">💄 Beauté & Santé</option>
+        <option value="Éducation">📚 Éducation</option>
+        <option value="Autre">📦 Autre</option>
+      </select>
     </div>
     <div class="form-group">
       <label>Photo du produit</label>
@@ -2345,53 +2382,98 @@ async function initWavePayment() {
 // ════════════════════════════════════════════════════════════
 //  MARKETPLACE
 // ════════════════════════════════════════════════════════════
+const CATEGORY_ICONS = { 'Électronique':'📱', 'Véhicules':'🚗', 'Immobilier':'🏠', 'Mode':'👗', 'Maison':'🪑', 'Alimentation':'🍎', 'Services':'🔧', 'Sport':'⚽', 'Beauté':'💄', 'Éducation':'📚', 'Autre':'📦' };
+let _mktCategory = '';
+
 async function loadProducts() {
   try {
     const data = await apiFetch('/products');
-    const grid = document.getElementById('products-grid');
-    if (!data || !data.length) {
-      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🛒</div><p>Aucun produit disponible</p><p style="font-size:12px;margin-top:4px">Soyez le premier à vendre !</p></div>';
-      return;
-    }
-    grid.innerHTML = data.map(p => {
-      const isMine = p.seller_id === me.id;
-      const isUrl = p.image && p.image.startsWith('http');
-      const imgContent = isUrl
-        ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-          + `<span style="display:none;align-items:center;justify-content:center;font-size:36px;width:100%;height:100%">📦</span>`
-        : `<span style="font-size:36px">${p.image || '📦'}</span>`;
-      const sellerName = p.seller?.name || p.seller?.phone || 'Vendeur';
-      const pid = p.id;
-      const cardClick  = isMine ? "openEditProductModal('" + pid + "')" : "openBuyModal('" + pid + "')";
-      const actionBtn  = isMine
-        ? "<button class='product-buy-btn' style='background:var(--bg3);color:var(--text1);border:1px solid var(--border)' onclick='event.stopPropagation();openEditProductModal(\"" + pid + "\")'>✏️ Modifier</button>"
-        : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>Acheter</button>";
-      return `<div class="product-card" onclick="${cardClick}">
-        <div class="product-img" style="${isUrl?'padding:0;overflow:hidden':''}">${imgContent}</div>
-        <div class="product-info">
-          <div class="product-name">${escHtml(p.name)}</div>
-          <div class="product-desc">${escHtml(p.description || '')}</div>
-          <div class="product-footer">
-            <div>
-              <div class="product-price">${p.price.toLocaleString()} F</div>
-              <div class="product-seller">${escHtml(sellerName)}</div>
-            </div>
-            ${actionBtn}
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-    // Store for buy modal
-    window._products = data;
+    window._products = data || [];
+    _buildCategoryBar(data || []);
+    filterProducts();
   } catch(e) {
     document.getElementById('products-grid').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">⚠️</div><p>Erreur de chargement</p></div>';
   }
+}
+
+function _buildCategoryBar(products) {
+  const cats = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+  const bar = document.getElementById('mkt-categories');
+  if (!bar) return;
+  bar.innerHTML = `<button class="mkt-cat-btn ${_mktCategory===''?'active':''}" data-cat="" onclick="selectCategory(this)">Tout</button>`
+    + cats.map(c => `<button class="mkt-cat-btn ${_mktCategory===c?'active':''}" data-cat="${escHtml(c)}" onclick="selectCategory(this)">${CATEGORY_ICONS[c]||'🏷️'} ${escHtml(c)}</button>`).join('');
+}
+
+function selectCategory(btn) {
+  _mktCategory = btn.dataset.cat;
+  document.querySelectorAll('.mkt-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === _mktCategory));
+  filterProducts();
+}
+
+function filterProducts() {
+  const query = (document.getElementById('mkt-search')?.value || '').toLowerCase().trim();
+  const sort = document.getElementById('mkt-sort')?.value || 'recent';
+  let data = (window._products || []).slice();
+  // Filtrer par catégorie
+  if (_mktCategory) data = data.filter(p => p.category === _mktCategory);
+  // Filtrer par recherche
+  if (query) data = data.filter(p =>
+    (p.name || '').toLowerCase().includes(query) ||
+    (p.description || '').toLowerCase().includes(query) ||
+    (p.category || '').toLowerCase().includes(query) ||
+    (p.seller?.name || '').toLowerCase().includes(query)
+  );
+  // Trier
+  if (sort === 'price-asc') data.sort((a, b) => a.price - b.price);
+  else if (sort === 'price-desc') data.sort((a, b) => b.price - a.price);
+  _renderProducts(data);
+}
+
+function _renderProducts(data) {
+  const grid = document.getElementById('products-grid');
+  if (!data || !data.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🔍</div><p>Aucun produit trouvé</p></div>';
+    return;
+  }
+  grid.innerHTML = data.map(p => {
+    const isMine = p.seller_id === me.id;
+    const isUrl = p.image && p.image.startsWith('http');
+    const imgContent = isUrl
+      ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        + `<span style="display:none;align-items:center;justify-content:center;font-size:36px;width:100%;height:100%">📦</span>`
+      : `<span style="font-size:36px">${p.image || '📦'}</span>`;
+    const sellerName = p.seller?.name || p.seller?.phone || 'Vendeur';
+    const pid = p.id;
+    const catBadge = p.category ? `<span style="font-size:10px;background:var(--green-light);color:var(--green-dark);padding:2px 6px;border-radius:10px;font-weight:600">${CATEGORY_ICONS[p.category]||'🏷️'} ${escHtml(p.category)}</span>` : '';
+    const cardClick  = isMine ? "openEditProductModal('" + pid + "')" : "openBuyModal('" + pid + "')";
+    const actionBtn  = isMine
+      ? "<button class='product-buy-btn' style='background:var(--bg3);color:var(--text1);border:1px solid var(--border)' onclick='event.stopPropagation();openEditProductModal(\"" + pid + "\")'>✏️ Modifier</button>"
+      : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>Acheter</button>";
+    return `<div class="product-card" onclick="${cardClick}">
+      <div class="product-img" style="${isUrl?'padding:0;overflow:hidden':''}">${imgContent}</div>
+      <div class="product-info">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div class="product-name" style="flex:1">${escHtml(p.name)}</div>
+          ${catBadge}
+        </div>
+        <div class="product-desc">${escHtml(p.description || '')}</div>
+        <div class="product-footer">
+          <div>
+            <div class="product-price">${p.price.toLocaleString()} F</div>
+            <div class="product-seller">${escHtml(sellerName)}</div>
+          </div>
+          ${actionBtn}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function openAddProductModal() {
   document.getElementById('prod-name').value = '';
   document.getElementById('prod-desc').value = '';
   document.getElementById('prod-price').value = '';
+  document.getElementById('prod-category').value = '';
   document.getElementById('prod-emoji').value = '📦';
   document.getElementById('prod-msg').textContent = '';
   openModal('modal-add-product');
@@ -2434,7 +2516,8 @@ async function addProduct() {
       });
       image = up.url;
     }
-    await apiFetch('/products', 'POST', { name, description, price: parseInt(price), image });
+    const category = document.getElementById('prod-category').value;
+    await apiFetch('/products', 'POST', { name, description, price: parseInt(price), image, category: category || null });
     // Reset
     _prodPhotoBase64 = null; _prodPhotoMime = null;
     document.getElementById('prod-photo-img').style.display = 'none';
