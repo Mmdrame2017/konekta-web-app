@@ -2529,6 +2529,7 @@ function openBuyModal(productId) {
 
 async function buyProduct() {
   if (!buyTargetProduct) return;
+  if (!confirm(`Confirmer l'achat de "${buyTargetProduct.name}" pour ${buyTargetProduct.price.toLocaleString()} FCFA ?`)) return;
   const btn = document.getElementById('buy-prod-btn');
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
   try {
