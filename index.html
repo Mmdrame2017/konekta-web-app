@@ -532,6 +532,12 @@
     display:flex;align-items:center;justify-content:space-between;
   }
 
+  /* ── Legal pages ── */
+  .legal-content h4 { font-size:14px; font-weight:700; margin:16px 0 6px; color:var(--green-dark); }
+  .legal-content ul, .legal-content ol { padding-left:20px; margin:6px 0 10px; }
+  .legal-content li { margin-bottom:4px; }
+  .legal-content p { margin-bottom:8px; }
+
   /* ── READ RECEIPTS ── */
   .msg-ticks { font-size:11px; margin-left:3px; opacity:.65; }
   .msg-ticks.read { color:#a8d8ff; opacity:1; }
@@ -838,6 +844,26 @@
             Admin — Retraits en attente
           </div>
           <div id="admin-withdrawals-list" style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden"></div>
+        </div>
+
+        <div style="font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:16px 4px 8px;font-weight:600">Informations légales</div>
+        <div class="profile-section">
+          <div class="profile-row" onclick="showLegalPage('cgu')">
+            <div class="profile-row-left"><span class="profile-row-icon">📋</span><span class="profile-row-label">Conditions d'utilisation</span></div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+          <div class="profile-row" onclick="showLegalPage('privacy')">
+            <div class="profile-row-left"><span class="profile-row-icon">🔒</span><span class="profile-row-label">Politique de confidentialité</span></div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+          <div class="profile-row" onclick="showLegalPage('security')">
+            <div class="profile-row-left"><span class="profile-row-icon">🛡️</span><span class="profile-row-label">Sécurité des paiements</span></div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+          <div class="profile-row" onclick="showLegalPage('about')">
+            <div class="profile-row-left"><span class="profile-row-icon">ℹ️</span><span class="profile-row-label">À propos de Konekta</span></div>
+            <span class="profile-row-arrow">›</span>
+          </div>
         </div>
 
         <button class="logout-btn" onclick="logout()">🚪 Se déconnecter</button>
@@ -1292,6 +1318,179 @@ async function verifyOtp() {
 function backToPhone() {
   document.getElementById('step-otp').style.display = 'none';
   document.getElementById('step-phone').style.display = 'block';
+}
+
+// ════════════════════════════════════════════════════════════
+//  PAGES LÉGALES
+// ════════════════════════════════════════════════════════════
+const LEGAL_PAGES = {
+cgu: { title: '📋 Conditions Générales d\'Utilisation', body: `
+<h4>1. Objet</h4>
+<p>Les présentes Conditions Générales d'Utilisation (CGU) régissent l'accès et l'utilisation de l'application Konekta, plateforme de messagerie, marketplace et paiement mobile opérant au Sénégal.</p>
+
+<h4>2. Inscription et compte</h4>
+<p>L'inscription nécessite un numéro de téléphone valide. L'utilisateur est responsable de la confidentialité de ses identifiants. Tout usage frauduleux doit être signalé immédiatement.</p>
+
+<h4>3. Services proposés</h4>
+<ul>
+<li><strong>Messagerie</strong> — Échange de messages texte, vocaux, images et fichiers entre utilisateurs</li>
+<li><strong>Appels</strong> — Appels audio et vidéo via WebRTC</li>
+<li><strong>Marketplace</strong> — Publication et achat de produits/services entre utilisateurs</li>
+<li><strong>Paiements</strong> — Transferts via Wave Money entre utilisateurs</li>
+</ul>
+
+<h4>4. Obligations des utilisateurs</h4>
+<ul>
+<li>Ne pas publier de contenu illicite, offensant ou trompeur</li>
+<li>Ne pas utiliser l'application à des fins frauduleuses</li>
+<li>Respecter les lois sénégalaises en vigueur</li>
+<li>Fournir des informations exactes lors de la mise en vente de produits</li>
+</ul>
+
+<h4>5. Marketplace</h4>
+<p>Konekta agit en tant qu'intermédiaire technique entre acheteurs et vendeurs. Konekta ne garantit ni la qualité, ni la conformité des produits. Les transactions sont effectuées directement entre les parties via Wave Money.</p>
+
+<h4>6. Responsabilité</h4>
+<p>Konekta ne saurait être tenu responsable des dommages directs ou indirects liés à l'utilisation de l'application, ni des transactions entre utilisateurs.</p>
+
+<h4>7. Propriété intellectuelle</h4>
+<p>L'ensemble des éléments de Konekta (logo, design, code) sont protégés par le droit de la propriété intellectuelle. Toute reproduction est interdite sans autorisation.</p>
+
+<h4>8. Modification des CGU</h4>
+<p>Konekta se réserve le droit de modifier les présentes CGU. Les utilisateurs seront informés de toute modification substantielle.</p>
+
+<h4>9. Droit applicable</h4>
+<p>Les présentes CGU sont régies par le droit sénégalais. Tout litige sera soumis aux tribunaux compétents de Dakar.</p>
+
+<p style="margin-top:16px;font-style:italic;color:var(--text2)">Dernière mise à jour : Avril 2026</p>
+`},
+
+privacy: { title: '🔒 Politique de Confidentialité', body: `
+<h4>1. Données collectées</h4>
+<ul>
+<li><strong>Compte</strong> — Numéro de téléphone, nom (facultatif), photo de profil (facultative)</li>
+<li><strong>Messages</strong> — Contenu des conversations (stocké de manière sécurisée)</li>
+<li><strong>Marketplace</strong> — Annonces publiées, historique d'achats</li>
+<li><strong>Paiements</strong> — Historique des transactions Wave (montants, dates, statuts)</li>
+<li><strong>Technique</strong> — Adresse IP, type d'appareil, horodatage de connexion</li>
+</ul>
+
+<h4>2. Utilisation des données</h4>
+<p>Vos données sont utilisées exclusivement pour :</p>
+<ul>
+<li>Fournir et améliorer les services Konekta</li>
+<li>Assurer la sécurité de votre compte</li>
+<li>Faciliter les transactions de paiement</li>
+<li>Vous contacter en cas de problème sur votre compte</li>
+</ul>
+
+<h4>3. Partage des données</h4>
+<p>Konekta ne vend ni ne partage vos données personnelles à des tiers. Seules exceptions :</p>
+<ul>
+<li><strong>Wave Money</strong> — Données nécessaires au traitement des paiements</li>
+<li><strong>Obligations légales</strong> — Sur demande judiciaire des autorités sénégalaises</li>
+</ul>
+
+<h4>4. Stockage et sécurité</h4>
+<p>Les données sont hébergées sur des serveurs sécurisés (Supabase, infrastructure cloud). Les communications sont chiffrées en transit (HTTPS/TLS). Les mots de passe ne sont jamais stockés en clair.</p>
+
+<h4>5. Conservation</h4>
+<p>Les données de compte sont conservées tant que le compte est actif. Les messages sont conservés pour assurer la continuité du service. Vous pouvez demander la suppression de votre compte à tout moment.</p>
+
+<h4>6. Vos droits</h4>
+<p>Conformément à la loi sénégalaise n°2008-12 sur la protection des données personnelles, vous disposez d'un droit d'accès, de modification et de suppression de vos données. Contactez-nous pour exercer ces droits.</p>
+
+<h4>7. Cookies</h4>
+<p>Konekta utilise le stockage local du navigateur (localStorage) pour maintenir votre session. Aucun cookie tiers n'est utilisé.</p>
+
+<p style="margin-top:16px;font-style:italic;color:var(--text2)">Dernière mise à jour : Avril 2026</p>
+`},
+
+security: { title: '🛡️ Sécurité des Paiements', body: `
+<h4>Paiements sécurisés via Wave Money</h4>
+<p>Konekta utilise <strong>Wave Money</strong>, le leader du paiement mobile au Sénégal, pour traiter tous les paiements. Votre argent transite directement via l'infrastructure Wave — Konekta ne stocke jamais vos informations bancaires.</p>
+
+<h4>Comment ça marche ?</h4>
+<ol>
+<li>Vous cliquez sur "Payer via Wave" dans Konekta</li>
+<li>Vous êtes redirigé vers la page de paiement sécurisée de Wave</li>
+<li>Vous confirmez le paiement avec votre code PIN Wave</li>
+<li>Konekta est notifié du succès et met à jour votre transaction</li>
+</ol>
+
+<h4>Mesures de sécurité</h4>
+<ul>
+<li>🔐 <strong>Chiffrement HTTPS/TLS</strong> — Toutes les communications sont chiffrées</li>
+<li>🔑 <strong>Authentification JWT</strong> — Chaque requête est authentifiée par un token sécurisé</li>
+<li>💳 <strong>Aucune donnée bancaire stockée</strong> — Konekta ne conserve jamais vos informations Wave</li>
+<li>📱 <strong>Confirmation Wave</strong> — Chaque paiement nécessite votre code PIN Wave personnel</li>
+<li>📊 <strong>Traçabilité</strong> — Historique complet de vos transactions dans l'onglet Wallet</li>
+</ul>
+
+<h4>Solde vendeur</h4>
+<p>Les paiements reçus pour vos produits sont crédités sur votre solde vendeur Konekta. Vous pouvez retirer vos fonds à tout moment vers votre compte Wave.</p>
+
+<h4>En cas de problème</h4>
+<p>Si vous constatez une transaction non autorisée ou suspecte :</p>
+<ul>
+<li>Changez immédiatement votre code PIN Wave</li>
+<li>Contactez le support Konekta</li>
+<li>Contactez Wave au <strong>*100#</strong></li>
+</ul>
+
+<p style="margin-top:16px;font-style:italic;color:var(--text2)">Dernière mise à jour : Avril 2026</p>
+`},
+
+about: { title: 'ℹ️ À propos de Konekta', body: `
+<div style="text-align:center;margin-bottom:20px">
+<div style="font-size:48px">⚡</div>
+<div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--green)">Konekta</div>
+<div style="font-size:13px;color:var(--text2);margin-top:4px">Version 2.0 — Avril 2026</div>
+</div>
+
+<h4>Notre mission</h4>
+<p>Konekta connecte les Sénégalais à travers une plateforme tout-en-un : messagerie instantanée, appels audio/vidéo, marketplace locale et paiement mobile Wave. Simple, rapide, sécurisé.</p>
+
+<h4>Fonctionnalités</h4>
+<ul>
+<li>💬 <strong>Messagerie</strong> — Texte, vocal, photos, fichiers, groupes</li>
+<li>📞 <strong>Appels</strong> — Audio et vidéo en temps réel</li>
+<li>🛍️ <strong>Marketplace</strong> — Achetez et vendez localement</li>
+<li>💳 <strong>Paiements Wave</strong> — Envoyez et recevez de l'argent</li>
+<li>👤 <strong>Profil personnalisé</strong> — Photo, nom, portefeuille</li>
+</ul>
+
+<h4>Technologies</h4>
+<p>Konekta est construit avec des technologies modernes et fiables : WebRTC pour les appels, Socket.io pour le temps réel, Supabase pour la base de données, Wave API pour les paiements.</p>
+
+<h4>Contact</h4>
+<p>📧 Email : <strong>support@konekta.sn</strong></p>
+<p>📱 WhatsApp : <strong>+221 77 644 6507</strong></p>
+
+<h4>Mentions légales</h4>
+<p>Konekta est édité par Konekta SN.<br>Siège social : Dakar, Sénégal</p>
+
+<p style="margin-top:20px;text-align:center;font-size:12px;color:var(--text2)">Fait avec ❤️ au Sénégal 🇸🇳</p>
+`}
+};
+
+function showLegalPage(key) {
+  const page = LEGAL_PAGES[key];
+  if (!page) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay show';
+  overlay.style.zIndex = '1001';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `<div class="modal" style="max-width:520px;max-height:90vh;overflow-y:auto;padding:20px">
+    <div class="modal-header" style="margin-bottom:16px">
+      <h3 style="font-size:16px">${page.title}</h3>
+      <button class="close-btn" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="legal-content" style="font-size:13px;line-height:1.65;color:var(--text)">
+      ${page.body}
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
 }
 
 function logout() {
