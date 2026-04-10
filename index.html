@@ -3462,12 +3462,29 @@ async function acceptCall() {
   if (_isVideoCall) _showLocalVideo();
 }
 
+let _remoteStreamPending = null; // stocker le stream si l'overlay n'est pas encore prêt
+
 function _onRemoteStream(stream) {
-  _playRemoteStream(stream);
+  _remoteStreamPending = stream;
   if (_isVideoCall) {
+    // Pour vidéo : utiliser UNIQUEMENT l'élément <video> (pas <audio>, sinon double playback = Larsen)
     const vid = document.getElementById('remote-video');
     if (vid) { vid.srcObject = stream; vid.play().catch(() => {}); }
+    // Ne PAS appeler _playRemoteStream pour éviter le feedback audio
+  } else {
+    // Audio seulement : utiliser l'élément <audio>
+    _playRemoteStream(stream);
   }
+}
+
+function _attachPendingRemoteStream() {
+  if (!_remoteStreamPending) return;
+  if (_isVideoCall) {
+    const vid = document.getElementById('remote-video');
+    if (vid) { vid.srcObject = _remoteStreamPending; vid.play().catch(() => {}); }
+  }
+  const localVid = document.getElementById('local-video');
+  if (localVid && _localStream) { localVid.srcObject = _localStream; localVid.play().catch(() => {}); }
 }
 
 function _showLocalVideo() {
@@ -3526,6 +3543,7 @@ function cleanupCall() {
   if (_pc) { _pc.close(); _pc = null; }
   if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
   _stopRemoteStream();
+  _remoteStreamPending = null;
   _iceCandidateQueue = [];
   _callPeer = null;
   document.getElementById('call-overlay')?.remove();
@@ -3592,6 +3610,8 @@ function showCallOverlay(state, peerName, peerId) {
     }, 1000);
   }
   document.body.appendChild(overlay);
+  // Rattacher les streams si le remote est arrivé avant que l'overlay soit prêt
+  if (state === 'active') _attachPendingRemoteStream();
 }
 
 // ── Socket listeners (appelés après init socket) ─────────────
@@ -3604,8 +3624,9 @@ function initCallListeners() {
   socket.on('callAnswered', async ({ answer }) => {
     if (_pc) {
       await _pc.setRemoteDescription(new RTCSessionDescription(answer));
-      await _flushIceCandidates(); // vider les candidats reçus avant setRemoteDescription
+      await _flushIceCandidates();
       showCallOverlay('active', _callPeer?.name || '?', _callPeer?.id);
+      if (_isVideoCall) _showLocalVideo();
     }
   });
   socket.on('iceCandidate', async ({ candidate }) => {
