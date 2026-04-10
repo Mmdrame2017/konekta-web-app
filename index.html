@@ -503,6 +503,27 @@
   .call-action-btn.mute   { background:rgba(255,255,255,.15); }
   .call-action-btn.speaker{ background:rgba(255,255,255,.15); }
 
+  /* ── Video Call ── */
+  #call-overlay.video-call { background:#000; }
+  #call-overlay .video-full {
+    position:absolute;inset:0;object-fit:cover;width:100%;height:100%;z-index:0;
+    background:#111;
+  }
+  #call-overlay .video-pip {
+    position:absolute;bottom:110px;right:16px;width:120px;height:160px;border-radius:12px;
+    object-fit:cover;z-index:2;border:2px solid rgba(255,255,255,.3);background:#222;
+  }
+  #call-overlay .video-call-bar {
+    position:absolute;bottom:0;left:0;right:0;z-index:3;
+    display:flex;align-items:center;justify-content:center;gap:20px;
+    padding:24px 16px;background:linear-gradient(transparent,rgba(0,0,0,.7));
+  }
+  #call-overlay .video-call-top {
+    position:absolute;top:0;left:0;right:0;z-index:3;
+    padding:16px 20px;background:linear-gradient(rgba(0,0,0,.6),transparent);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+
   /* ── READ RECEIPTS ── */
   .msg-ticks { font-size:11px; margin-left:3px; opacity:.65; }
   .msg-ticks.read { color:#a8d8ff; opacity:1; }
@@ -1676,7 +1697,8 @@ function openChat(contact) {
         <div class="chat-header-status" id="chat-status">${escHtml(contact.phone || '')}</div>
       </div>
       <div class="chat-header-actions">
-        <button class="icon-btn" onclick="startCall('${contact.userId}','${safeName}')" title="Appel audio">📞</button>
+        <button class="icon-btn" onclick="startCall('${contact.userId}','${safeName}',false)" title="Appel audio">📞</button>
+        <button class="icon-btn" onclick="startCall('${contact.userId}','${safeName}',true)" title="Appel vidéo">📹</button>
         <button class="icon-btn" onclick="toggleMsgSearch()" title="Rechercher dans la conversation">🔍</button>
         <button class="icon-btn" onclick="openContactModal('${contact.userId}','${safePhone}','${safeName}')" title="Infos contact">👤</button>
         <button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l'argent">💳</button>
@@ -3365,6 +3387,7 @@ const STUN = { iceServers: [
   { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
 ]};
 let _pc = null, _localStream = null, _callPeer = null, _callTimer = null, _callSecs = 0, _muted = false;
+let _isVideoCall = false, _camOff = false;
 let _iceCandidateQueue = []; // queue candidats ICE reçus avant setRemoteDescription
 
 // Ajouter un candidat ICE ou le mettre en file si remoteDescription pas encore prêt
@@ -3384,30 +3407,33 @@ async function _flushIceCandidates() {
   }
 }
 
-// ── Outgoing call ────────────────────────────────────────────
-async function startCall(userId, userName) {
+// ── Outgoing call (audio ou vidéo) ──────────────────────────
+async function startCall(userId, userName, isVideo = false) {
   if (_pc) return;
-  // Débloquer l'audio pendant le geste utilisateur (click sur le bouton appel)
+  _isVideoCall = isVideo; _camOff = false;
   const audio = document.getElementById('call-audio');
   if (audio) { audio.muted = false; audio.play().catch(() => {}); }
+  const constraints = isVideo ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true };
   try {
-    _localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch(e) { alert('Microphone indisponible : ' + e.message); return; }
+    _localStream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch(e) { alert((isVideo ? 'Caméra/micro' : 'Microphone') + ' indisponible : ' + e.message); return; }
   _callPeer = { id: userId, name: userName };
   _pc = new RTCPeerConnection(STUN);
   _localStream.getTracks().forEach(t => _pc.addTrack(t, _localStream));
-  _pc.ontrack = e => { if (e.streams && e.streams[0]) _playRemoteStream(e.streams[0]); };
+  _pc.ontrack = e => { if (e.streams && e.streams[0]) _onRemoteStream(e.streams[0]); };
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: userId, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   const offer = await _pc.createOffer();
   await _pc.setLocalDescription(offer);
-  socket.emit('callOffer', { to: userId, offer, callerId: me.id, callerName: me.name || me.phone });
+  socket.emit('callOffer', { to: userId, offer, callerId: me.id, callerName: me.name || me.phone, isVideo });
   showCallOverlay('calling', userName, userId);
+  if (isVideo) _showLocalVideo();
 }
 
 // ── Incoming call ────────────────────────────────────────────
-function onIncomingCall({ from, callerName, offer }) {
+function onIncomingCall({ from, callerName, offer, isVideo }) {
   _callPeer = { id: from, name: callerName, offer };
+  _isVideoCall = !!isVideo; _camOff = false;
   _startRing();
   showCallOverlay('incoming', callerName, from);
 }
@@ -3415,24 +3441,39 @@ function onIncomingCall({ from, callerName, offer }) {
 async function acceptCall() {
   if (!_callPeer) return;
   _stopRing();
-  // Débloquer l'élément audio PENDANT le geste utilisateur (sinon bloqué par autoplay mobile)
   const audio = document.getElementById('call-audio');
   if (audio) { audio.muted = false; audio.play().catch(() => {}); }
   const { id, name, offer } = _callPeer;
+  const constraints = _isVideoCall ? { audio: true, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } } : { audio: true };
   try {
-    _localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch(e) { alert('Microphone indisponible : ' + e.message); declineCall(); return; }
+    _localStream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch(e) { alert('Caméra/micro indisponible : ' + e.message); declineCall(); return; }
   _pc = new RTCPeerConnection(STUN);
   _localStream.getTracks().forEach(t => _pc.addTrack(t, _localStream));
-  _pc.ontrack = e => { if (e.streams && e.streams[0]) _playRemoteStream(e.streams[0]); };
+  _pc.ontrack = e => { if (e.streams && e.streams[0]) _onRemoteStream(e.streams[0]); };
   _pc.onicecandidate = e => { if (e.candidate && socket) socket.emit('iceCandidate', { to: id, candidate: e.candidate }); };
   _pc.onconnectionstatechange = () => { if (['disconnected','failed','closed'].includes(_pc?.connectionState)) cleanupCall(); };
   await _pc.setRemoteDescription(new RTCSessionDescription(offer));
-  await _flushIceCandidates(); // vider les candidats reçus avant setRemoteDescription
+  await _flushIceCandidates();
   const answer = await _pc.createAnswer();
   await _pc.setLocalDescription(answer);
   socket.emit('callAnswer', { to: id, answer });
   showCallOverlay('active', name, id);
+  if (_isVideoCall) _showLocalVideo();
+}
+
+function _onRemoteStream(stream) {
+  _playRemoteStream(stream);
+  if (_isVideoCall) {
+    const vid = document.getElementById('remote-video');
+    if (vid) { vid.srcObject = stream; vid.play().catch(() => {}); }
+  }
+}
+
+function _showLocalVideo() {
+  if (!_localStream) return;
+  const vid = document.getElementById('local-video');
+  if (vid) { vid.srcObject = _localStream; vid.play().catch(() => {}); }
 }
 
 function declineCall() {
@@ -3454,8 +3495,34 @@ function toggleMute() {
   if (btn) { btn.textContent = _muted ? '🔇' : '🎙️'; btn.style.background = _muted ? 'rgba(227,6,19,.4)' : 'rgba(255,255,255,.15)'; }
 }
 
+function toggleCamera() {
+  if (!_localStream || !_isVideoCall) return;
+  _camOff = !_camOff;
+  _localStream.getVideoTracks().forEach(t => { t.enabled = !_camOff; });
+  const btn = document.getElementById('call-cam-btn');
+  if (btn) { btn.textContent = _camOff ? '🚫' : '📷'; btn.style.background = _camOff ? 'rgba(227,6,19,.4)' : 'rgba(255,255,255,.15)'; }
+}
+
+async function switchCamera() {
+  if (!_localStream || !_isVideoCall) return;
+  const currentTrack = _localStream.getVideoTracks()[0];
+  if (!currentTrack) return;
+  const currentFacing = currentTrack.getSettings().facingMode || 'user';
+  const newFacing = currentFacing === 'user' ? 'environment' : 'user';
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: newFacing, width: { ideal: 640 }, height: { ideal: 480 } } });
+    const newTrack = newStream.getVideoTracks()[0];
+    const sender = _pc.getSenders().find(s => s.track?.kind === 'video');
+    if (sender) await sender.replaceTrack(newTrack);
+    currentTrack.stop();
+    _localStream.removeTrack(currentTrack);
+    _localStream.addTrack(newTrack);
+    _showLocalVideo();
+  } catch(e) {}
+}
+
 function cleanupCall() {
-  clearInterval(_callTimer); _callSecs = 0; _muted = false;
+  clearInterval(_callTimer); _callSecs = 0; _muted = false; _isVideoCall = false; _camOff = false;
   if (_pc) { _pc.close(); _pc = null; }
   if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
   _stopRemoteStream();
@@ -3470,12 +3537,17 @@ function showCallOverlay(state, peerName, peerId) {
   const initial = (peerName || '?')[0].toUpperCase();
   const overlay = document.createElement('div');
   overlay.id = 'call-overlay';
+  if (_isVideoCall) overlay.classList.add('video-call');
+
+  const videoElements = _isVideoCall ? `
+    <video id="remote-video" class="video-full" autoplay playsinline></video>
+    <video id="local-video" class="video-pip" autoplay playsinline muted></video>` : '';
 
   if (state === 'calling') {
-    overlay.innerHTML = `
+    overlay.innerHTML = `${videoElements}
       <div class="call-avatar-big">${initial}</div>
       <div class="call-name">${escHtml(peerName)}</div>
-      <div class="call-status" id="call-status-txt">Appel en cours...</div>
+      <div class="call-status" id="call-status-txt">${_isVideoCall ? 'Appel vidéo...' : 'Appel en cours...'}</div>
       <div class="call-actions">
         <button class="call-action-btn hangup" onclick="hangupCall()" title="Raccrocher">📵</button>
       </div>`;
@@ -3483,20 +3555,35 @@ function showCallOverlay(state, peerName, peerId) {
     overlay.innerHTML = `
       <div class="call-avatar-big">${initial}</div>
       <div class="call-name">${escHtml(peerName)}</div>
-      <div class="call-status">Appel entrant...</div>
+      <div class="call-status">${_isVideoCall ? 'Appel vidéo entrant...' : 'Appel entrant...'}</div>
       <div class="call-actions">
         <button class="call-action-btn hangup" onclick="declineCall()" title="Refuser">📵</button>
-        <button class="call-action-btn accept" onclick="acceptCall()" title="Accepter">📞</button>
+        <button class="call-action-btn accept" onclick="acceptCall()" title="Accepter">${_isVideoCall ? '📹' : '📞'}</button>
       </div>`;
   } else {
-    overlay.innerHTML = `
-      <div class="call-avatar-big">${initial}</div>
-      <div class="call-name">${escHtml(peerName)}</div>
-      <div class="call-timer" id="call-timer-display">0:00</div>
-      <div class="call-actions">
-        <button class="call-action-btn mute" id="call-mute-btn" onclick="toggleMute()" title="Muet">🎙️</button>
-        <button class="call-action-btn hangup" onclick="hangupCall()" title="Raccrocher">📵</button>
-      </div>`;
+    // Active call
+    if (_isVideoCall) {
+      overlay.innerHTML = `${videoElements}
+        <div class="video-call-top">
+          <div style="color:#fff;font-weight:600;font-size:15px">${escHtml(peerName)}</div>
+          <div style="color:rgba(255,255,255,.7);font-size:14px" id="call-timer-display">0:00</div>
+        </div>
+        <div class="video-call-bar">
+          <button class="call-action-btn mute" id="call-mute-btn" onclick="toggleMute()" title="Muet">🎙️</button>
+          <button class="call-action-btn mute" id="call-cam-btn" onclick="toggleCamera()" title="Caméra">📷</button>
+          <button class="call-action-btn mute" onclick="switchCamera()" title="Changer caméra">🔄</button>
+          <button class="call-action-btn hangup" onclick="hangupCall()" title="Raccrocher">📵</button>
+        </div>`;
+    } else {
+      overlay.innerHTML = `
+        <div class="call-avatar-big">${initial}</div>
+        <div class="call-name">${escHtml(peerName)}</div>
+        <div class="call-timer" id="call-timer-display">0:00</div>
+        <div class="call-actions">
+          <button class="call-action-btn mute" id="call-mute-btn" onclick="toggleMute()" title="Muet">🎙️</button>
+          <button class="call-action-btn hangup" onclick="hangupCall()" title="Raccrocher">📵</button>
+        </div>`;
+    }
     _callSecs = 0;
     _callTimer = setInterval(() => {
       _callSecs++;
