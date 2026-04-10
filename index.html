@@ -339,13 +339,15 @@
   /* ── MODALS ── */
   .modal-overlay {
     position:fixed; inset:0; background:rgba(10,46,26,.4); display:none;
-    align-items:center; justify-content:center; z-index:1000; padding:16px;
-    backdrop-filter:blur(4px);
+    align-items:flex-start; justify-content:center; z-index:1000; padding:16px;
+    padding-top:max(16px, env(safe-area-inset-top, 16px));
+    backdrop-filter:blur(4px); overflow-y:auto;
   }
   .modal-overlay.show { display:flex; }
   .modal {
     background:var(--card); border:1px solid var(--border); border-radius:24px;
     padding:24px; width:100%; max-width:400px; box-shadow:var(--shadow-lg);
+    margin:auto 0; flex-shrink:0;
   }
   .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
   .modal-header h3 { font-family:'Syne',sans-serif; font-size:17px; font-weight:700; }
