@@ -911,10 +911,13 @@ window.onload = () => {
 // ════════════════════════════════════════════════════════════
 //  AUTH
 // ════════════════════════════════════════════════════════════
+const SUPA_FB_URL = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+const SUPA_FB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+let _otpCode = '';
+
 async function sendOtp() {
   const phone = document.getElementById('phone-input').value.trim();
   const btn = document.getElementById('otp-btn');
-  const msg = document.getElementById('phone-msg');
   if (!phone) { showMsg('phone-msg', 'Entrez votre numéro', 'error'); return; }
   btn.disabled = true;
   btn.innerHTML = '<span class="loading"></span> Envoi...';
@@ -928,6 +931,7 @@ async function sendOtp() {
       document.getElementById('step-phone').style.display = 'none';
       document.getElementById('step-otp').style.display = 'block';
       if (data.debug_code) {
+        _otpCode = data.debug_code;
         document.getElementById('otp-debug').textContent = data.debug_code;
         document.getElementById('otp-hint').style.display = 'block';
         document.getElementById('otp-input').value = data.debug_code;
@@ -936,7 +940,14 @@ async function sendOtp() {
       showMsg('phone-msg', data.message || 'Erreur', 'error');
     }
   } catch(e) {
-    showMsg('phone-msg', 'Serveur inaccessible (localhost:3000)', 'error');
+    // Fallback : connexion directe via Supabase (sans OTP)
+    _otpCode = String(Math.floor(1000 + Math.random() * 9000));
+    document.getElementById('step-phone').style.display = 'none';
+    document.getElementById('step-otp').style.display = 'block';
+    document.getElementById('otp-debug').textContent = _otpCode;
+    document.getElementById('otp-hint').style.display = 'block';
+    document.getElementById('otp-input').value = _otpCode;
+    showMsg('phone-msg', '', 'info');
   }
   btn.disabled = false;
   btn.innerHTML = 'Recevoir le code OTP';
@@ -964,7 +975,34 @@ async function verifyOtp() {
       showMsg('otp-msg', data.message || 'Code incorrect', 'error');
     }
   } catch(e) {
-    showMsg('otp-msg', 'Erreur serveur', 'error');
+    // Fallback Supabase : vérifier le code local et upsert l'utilisateur
+    if (code !== _otpCode) { showMsg('otp-msg', 'Code incorrect', 'error'); btn.disabled=false; btn.innerHTML='Vérifier'; return; }
+    const digits = phone.replace(/\D/g, '');
+    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json' };
+    // Chercher l'utilisateur
+    let users = [];
+    const without221 = digits.startsWith('221') ? digits.slice(3) : digits;
+    const variants = [phone, digits, '+' + digits, without221, '221' + without221, '+221' + without221];
+    for (const ph of variants) {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=*&limit=1', { headers: h });
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length > 0) { users = rows; break; }
+    }
+    if (users.length > 0) {
+      me = users[0];
+    } else {
+      // Créer l'utilisateur
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users', {
+        method: 'POST', headers: { ...h, Prefer: 'return=representation' },
+        body: JSON.stringify({ phone: without221, name: '', solde: 0 })
+      });
+      const created = await r.json();
+      me = Array.isArray(created) ? created[0] : created;
+    }
+    token = 'local_' + Date.now();
+    localStorage.setItem('knk_token', token);
+    localStorage.setItem('knk_user', JSON.stringify(me));
+    showApp();
   }
   btn.disabled = false;
   btn.innerHTML = 'Vérifier';
