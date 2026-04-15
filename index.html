@@ -206,9 +206,9 @@
   .product-img {
     height:160px; background:linear-gradient(135deg,#0e3a1f,#11502c);
     display:flex; align-items:center; justify-content:center; font-size:48px;
-    border-bottom:1px solid var(--border); overflow:hidden;
+    border-bottom:1px solid var(--border); overflow:hidden; position:relative;
   }
-  .product-img img { width:100%; height:100%; object-fit:cover; }
+  .product-img img { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; display:block; }
   .product-info { padding:12px; }
   .product-name { font-size:14px; font-weight:600; margin-bottom:4px; }
   .product-desc { font-size:12px; color:var(--text2); margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -1790,7 +1790,7 @@ async function loadProducts() {
       const isMine = p.seller_id === me.id;
       const isUrl = p.image && p.image.startsWith('http');
       const imgContent = isUrl
-        ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        ? `<img src="${p.image}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           + `<span style="display:none;align-items:center;justify-content:center;font-size:36px;width:100%;height:100%">📦</span>`
         : `<span style="font-size:36px">${p.image || '📦'}</span>`;
       const sellerName = p.seller?.name || p.seller?.phone || 'Vendeur';
@@ -1800,7 +1800,7 @@ async function loadProducts() {
         ? "<button class='product-buy-btn' style='background:var(--bg3);color:var(--text1);border:1px solid var(--border)' onclick='event.stopPropagation();openEditProductModal(\"" + pid + "\")'>✏️ Modifier</button>"
         : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>Acheter</button>";
       return `<div class="product-card" data-name="${escHtml(p.name)}" data-category="${escHtml(p.category||'')}" onclick="${cardClick}">
-        <div class="product-img" style="${isUrl?'padding:0;overflow:hidden':''}">${imgContent}</div>
+        <div class="product-img">${imgContent}</div>
         <div class="product-info">
           <div class="product-name">${escHtml(p.name)}</div>
           <div class="product-desc">${escHtml(p.description || '')}</div>
