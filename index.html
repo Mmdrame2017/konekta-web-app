@@ -1,0 +1,2121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Konekta — Super App</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --primary: #8EA832;
+    --primary-dark: #738A25;
+    --secondary: #E87325;
+    --bg: #0a2e1a;
+    --bg2: #0d3d22;
+    --bg3: #11502c;
+    --card: #0e3a1f;
+    --border: rgba(255,255,255,0.12);
+    --text: #f0f5ef;
+    --text2: rgba(255,255,255,0.6);
+    --success: #4CAF50;
+    --warning: #E87325;
+    --wave: #1B6FD8;
+    --radius: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  body { background:var(--bg); color:var(--text); font-family:'Inter','Segoe UI',system-ui,sans-serif; height:100dvh; overflow:hidden; }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    height:100vh; gap:24px; padding:20px;
+    background: linear-gradient(155deg, #0D0F0A 0%, #13180C 50%, #0F1208 100%);
+  }
+  .logo { text-align:center; }
+  .logo h1 { font-size:42px; font-weight:800; background:linear-gradient(135deg,#8EA832,#E87325); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .logo p { color:var(--text2); margin-top:6px; font-size:15px; }
+  .login-card {
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:32px; width:100%; max-width:380px; box-shadow:var(--shadow);
+  }
+  .login-card h2 { font-size:20px; margin-bottom:20px; text-align:center; }
+  .form-group { margin-bottom:16px; }
+  .form-group label { display:block; font-size:13px; color:var(--text2); margin-bottom:6px; }
+  .form-group input {
+    width:100%; padding:12px 16px; background:var(--bg3); border:1px solid var(--border);
+    border-radius:var(--radius); color:var(--text); font-size:15px; outline:none; transition:.2s;
+  }
+  .form-group input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(142,168,50,.15); }
+  .btn {
+    width:100%; padding:13px; border:none; border-radius:var(--radius); font-size:15px;
+    font-weight:600; cursor:pointer; transition:.2s; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .btn-primary { background:var(--primary); color:#fff; }
+  .btn-primary:hover { background:var(--primary-dark); }
+  .btn-secondary { background:var(--bg3); color:var(--text); border:1px solid var(--border); }
+  .btn-secondary:hover { background:var(--border); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .otp-hint {
+    background:rgba(142,168,50,.1); border:1px solid rgba(142,168,50,.3);
+    border-radius:8px; padding:10px 14px; font-size:13px; color:var(--primary);
+    margin-bottom:16px; text-align:center; display:none;
+  }
+  .msg { font-size:13px; margin-top:10px; text-align:center; }
+  .msg.error { color:#E87325; }
+  .msg.success { color:var(--success); }
+
+  /* ── MAIN APP ── */
+  #app { display:none; height:100dvh; flex-direction:column; }
+  .topbar {
+    background:var(--bg2); border-bottom:1px solid var(--border);
+    padding:12px 16px; display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  .topbar-title { font-size:18px; font-weight:700; }
+  .topbar-right { display:flex; align-items:center; gap:12px; }
+  .avatar-sm {
+    width:36px; height:36px; border-radius:50%; background:var(--primary);
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; cursor:pointer;
+  }
+  .content { flex:1; overflow:hidden; display:flex; }
+
+  /* ── TABS ── */
+  .sidebar {
+    width:60px; background:var(--bg2); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:4px; flex-shrink:0;
+  }
+  .tab-btn {
+    width:44px; height:44px; border:none; background:transparent; color:var(--text2);
+    border-radius:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font-size:20px; transition:.2s; position:relative;
+  }
+  .tab-btn:hover { background:var(--bg3); color:var(--text); }
+  .tab-btn.active { background:rgba(142,168,50,.18); color:var(--primary); }
+  .tab-btn .badge {
+    position:absolute; top:4px; right:4px; width:8px; height:8px;
+    background:var(--secondary); border-radius:50%; display:none;
+  }
+  .tab-btn .badge.show { display:block; }
+  .tab-content { flex:1; overflow:hidden; display:none; flex-direction:column; }
+  .tab-content.active { display:flex; }
+
+  /* ── CHAT LIST ── */
+  .chat-layout { display:flex; width:100%; height:100%; }
+  .chat-list { width:300px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; }
+  .chat-list-header { padding:16px; border-bottom:1px solid var(--border); }
+  .chat-list-header h3 { font-size:16px; font-weight:700; margin-bottom:12px; }
+  .search-box {
+    display:flex; gap:8px; align-items:center;
+    background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px;
+  }
+  .search-box input { background:transparent; border:none; outline:none; color:var(--text); font-size:14px; flex:1; }
+  .search-box span { color:var(--text2); font-size:16px; }
+  .chat-items { flex:1; overflow-y:auto; }
+  .chat-item {
+    display:flex; align-items:center; gap:12px; padding:12px 16px; cursor:pointer; transition:.15s;
+    border-bottom:1px solid var(--border);
+  }
+  .chat-item:hover { background:var(--bg3); }
+  .chat-item.active { background:rgba(142,168,50,.1); }
+  .chat-avatar {
+    width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#8EA832,#1B6FD8);
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex-shrink:0;
+  }
+  .chat-item-info { flex:1; min-width:0; }
+  .chat-item-name { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat-item-last { font-size:12px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .new-chat-btn {
+    margin:12px; padding:10px; background:var(--primary); border:none; border-radius:var(--radius);
+    color:#fff; font-size:14px; font-weight:600; cursor:pointer; transition:.2s;
+  }
+  .new-chat-btn:hover { background:var(--primary-dark); }
+  .empty-state { padding:40px 20px; text-align:center; color:var(--text2); }
+  .empty-state .icon { font-size:48px; margin-bottom:12px; }
+
+  /* ── CHAT VIEW ── */
+  .chat-view { flex:1; display:flex; flex-direction:column; background:var(--bg); }
+  .chat-header {
+    background:var(--bg2); border-bottom:1px solid var(--border);
+    padding:12px 16px; display:flex; align-items:center; gap:12px;
+  }
+  .chat-header-info { flex:1; }
+  .chat-header-name { font-size:15px; font-weight:700; }
+  .chat-header-status { font-size:12px; color:var(--text2); margin-top:2px; }
+  .chat-header-actions { display:flex; gap:8px; }
+  .icon-btn {
+    width:36px; height:36px; border:none; background:var(--bg3); color:var(--text2);
+    border-radius:10px; cursor:pointer; font-size:16px; transition:.2s; display:flex; align-items:center; justify-content:center;
+  }
+  .icon-btn:hover { background:var(--border); color:var(--text); }
+  .messages-area { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:8px; }
+  .msg-bubble {
+    max-width:70%; padding:10px 14px; border-radius:16px; font-size:14px; line-height:1.5;
+    position:relative; word-break:break-word;
+  }
+  .msg-bubble.sent { background:var(--primary); color:#fff; align-self:flex-end; border-bottom-right-radius:4px; }
+  .msg-bubble.recv { background:var(--card); color:var(--text); align-self:flex-start; border-bottom-left-radius:4px; }
+  .msg-time { font-size:10px; opacity:.6; margin-top:4px; text-align:right; }
+  .msg-payment {
+    border:2px solid var(--wave); border-radius:16px; padding:12px 16px; max-width:240px;
+    background:rgba(27,111,216,.08);
+  }
+  .msg-payment .pay-amount { font-size:22px; font-weight:800; color:var(--wave); }
+  .msg-payment .pay-label { font-size:12px; color:var(--text2); margin-top:2px; }
+  .msg-payment .pay-status { font-size:11px; margin-top:6px; padding:3px 8px; border-radius:20px; display:inline-block; }
+  .pay-status.success { background:rgba(76,175,80,.15); color:var(--success); }
+  .pay-status.pending { background:rgba(255,152,0,.15); color:var(--warning); }
+  .typing-indicator { font-size:12px; color:var(--text2); padding:4px 16px; font-style:italic; min-height:20px; }
+  .chat-input-area {
+    padding:12px 16px; background:var(--bg2); border-top:1px solid var(--border);
+    display:flex; gap:8px; align-items:flex-end;
+  }
+  .chat-input {
+    flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:20px;
+    padding:10px 16px; color:var(--text); font-size:14px; outline:none; resize:none;
+    max-height:120px; line-height:1.4; transition:.2s; font-family:inherit;
+  }
+  .chat-input:focus { border-color:var(--primary); box-shadow:0 0 0 2px rgba(142,168,50,.12); }
+  .send-btn {
+    width:42px; height:42px; background:var(--primary); border:none; border-radius:50%;
+    color:#fff; font-size:18px; cursor:pointer; transition:.2s; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .send-btn:hover { background:var(--primary-dark); transform:scale(1.05); }
+  .pay-btn {
+    width:42px; height:42px; background:var(--wave); border:none; border-radius:50%;
+    color:#fff; font-size:16px; cursor:pointer; transition:.2s; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pay-btn:hover { opacity:.85; transform:scale(1.05); }
+  .chat-placeholder {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text2);
+  }
+  .chat-placeholder .icon { font-size:64px; margin-bottom:16px; opacity:.4; }
+
+  /* ── MARKETPLACE ── */
+  .marketplace-header { padding:16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .marketplace-header h3 { font-size:16px; font-weight:700; }
+  .products-grid { flex:1; overflow-y:auto; padding:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; align-content:start; }
+  .product-card {
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    overflow:hidden; transition:.2s; cursor:pointer;
+  }
+  .product-card:hover { transform:translateY(-3px); box-shadow:0 8px 28px rgba(0,0,0,.5); border-color:var(--secondary); }
+  .product-img {
+    height:140px; background:linear-gradient(135deg,#1B1E12,#222718);
+    display:flex; align-items:center; justify-content:center; font-size:48px;
+    border-bottom:1px solid var(--border);
+  }
+  .product-info { padding:12px; }
+  .product-name { font-size:14px; font-weight:600; margin-bottom:4px; }
+  .product-desc { font-size:12px; color:var(--text2); margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .product-footer { display:flex; align-items:center; justify-content:space-between; }
+  .product-price { font-size:16px; font-weight:800; color:var(--secondary); }
+  .product-seller { font-size:11px; color:var(--text2); }
+  .product-buy-btn {
+    padding:5px 12px; background:var(--wave); border:none; border-radius:8px;
+    color:#fff; font-size:12px; font-weight:600; cursor:pointer; transition:.2s;
+  }
+  .product-buy-btn:hover { opacity:.85; }
+  .product-mine-badge {
+    background:rgba(142,168,50,.15); color:var(--primary);
+    font-size:10px; padding:3px 8px; border-radius:20px; font-weight:600;
+  }
+
+  /* ── WALLET ── */
+  .wallet-content { flex:1; overflow-y:auto; padding:16px; }
+  .wallet-card {
+    background:linear-gradient(135deg,#1B6FD8,#0F4A9A);
+    border-radius:20px; padding:24px; margin-bottom:20px; position:relative; overflow:hidden;
+    border:1px solid rgba(27,111,216,.4);
+  }
+  .wallet-card::before {
+    content:''; position:absolute; top:-40px; right:-40px;
+    width:160px; height:160px; background:rgba(255,255,255,.05); border-radius:50%;
+  }
+  .wallet-card-label { font-size:13px; opacity:.8; margin-bottom:4px; }
+  .wallet-card-count { font-size:32px; font-weight:800; }
+  .wallet-card-sub { font-size:13px; opacity:.7; margin-top:4px; }
+  .wallet-section-title { font-size:14px; font-weight:700; color:var(--text2); margin-bottom:12px; text-transform:uppercase; letter-spacing:.5px; }
+  .tx-list { display:flex; flex-direction:column; gap:8px; }
+  .tx-item {
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:12px 16px; display:flex; align-items:center; gap:12px;
+  }
+  .tx-icon {
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;
+  }
+  .tx-icon.sent { background:rgba(232,115,37,.12); }
+  .tx-icon.recv { background:rgba(76,175,80,.12); }
+  .tx-info { flex:1; }
+  .tx-name { font-size:14px; font-weight:600; }
+  .tx-date { font-size:12px; color:var(--text2); margin-top:2px; }
+  .tx-amount { font-size:15px; font-weight:700; }
+  .tx-amount.sent { color:var(--secondary); }
+
+  .tx-amount.recv { color:var(--success); }
+  .tx-status { font-size:11px; padding:2px 8px; border-radius:20px; margin-top:3px; display:inline-block; }
+  .tx-status.success { background:rgba(76,175,80,.12); color:var(--success); }
+  .tx-status.pending { background:rgba(255,152,0,.12); color:var(--warning); }
+  .tx-status.failed { background:rgba(232,115,37,.12); color:var(--secondary); }
+
+  /* ── PROFILE ── */
+  .profile-content { flex:1; overflow-y:auto; padding:20px; }
+  .profile-hero {
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:24px; text-align:center; margin-bottom:20px;
+  }
+  .profile-avatar {
+    width:80px; height:80px; border-radius:50%; background:linear-gradient(135deg,#8EA832,#1B6FD8);
+    display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:700;
+    margin:0 auto 12px; box-shadow:0 4px 20px rgba(142,168,50,.25);
+  }
+  .profile-name { font-size:20px; font-weight:700; }
+  .profile-phone { font-size:14px; color:var(--text2); margin-top:4px; }
+  .profile-section { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:16px; }
+  .profile-row {
+    display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
+    border-bottom:1px solid var(--border); cursor:pointer; transition:.15s;
+  }
+  .profile-row:last-child { border-bottom:none; }
+  .profile-row:hover { background:var(--bg3); }
+  .profile-row-left { display:flex; align-items:center; gap:12px; }
+  .profile-row-icon { font-size:18px; width:32px; text-align:center; }
+  .profile-row-label { font-size:14px; font-weight:500; }
+  .profile-row-arrow { color:var(--text2); font-size:12px; }
+  .logout-btn {
+    width:100%; padding:14px; background:rgba(232,115,37,.1); border:1px solid rgba(232,115,37,.3);
+    border-radius:var(--radius); color:var(--secondary); font-size:15px; font-weight:600; cursor:pointer; transition:.2s;
+  }
+  .logout-btn:hover { background:rgba(232,115,37,.2); }
+
+  /* ── MODALS ── */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.7); display:none;
+    align-items:center; justify-content:center; z-index:1000; padding:16px;
+    overflow-y:auto;
+  }
+  .modal-overlay.show { display:flex; }
+  .modal {
+    background:var(--card); border:1px solid var(--border); border-radius:20px;
+    padding:24px; width:100%; max-width:400px; box-shadow:var(--shadow);
+    max-height:90vh; overflow-y:auto; margin:auto;
+  }
+  .modal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .modal-header h3 { font-size:17px; font-weight:700; }
+  .close-btn { background:none; border:none; color:var(--text2); font-size:20px; cursor:pointer; padding:4px; }
+  .close-btn:hover { color:var(--text); }
+  .modal-footer { display:flex; gap:10px; margin-top:20px; }
+  .modal-footer .btn { flex:1; }
+  .amount-display {
+    background:var(--bg3); border-radius:var(--radius); padding:20px; text-align:center; margin-bottom:16px;
+  }
+  .amount-display .amount-num { font-size:36px; font-weight:800; color:var(--wave); }
+  .amount-display .amount-unit { font-size:16px; color:var(--text2); margin-left:4px; }
+  .numpad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px; }
+  .numpad-btn {
+    padding:14px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius);
+    color:var(--text); font-size:18px; font-weight:600; cursor:pointer; transition:.15s; text-align:center;
+  }
+  .numpad-btn:hover { background:var(--border); }
+  .numpad-btn.del { color:var(--secondary); }
+  .numpad-btn:active { background:rgba(142,168,50,.15); }
+  .checkout-link {
+    display:block; text-align:center; padding:14px; background:var(--wave); border-radius:var(--radius);
+    color:#fff; font-weight:700; font-size:15px; text-decoration:none; margin-top:12px; transition:.2s;
+  }
+  .checkout-link:hover { opacity:.85; }
+  .status-banner {
+    padding:12px 16px; border-radius:var(--radius); text-align:center; margin-top:12px; font-weight:600; display:none;
+  }
+  .status-banner.show { display:block; }
+  .status-banner.success { background:rgba(76,175,80,.15); color:var(--success); }
+  .status-banner.pending { background:rgba(255,152,0,.15); color:var(--warning); }
+
+  /* ── UTILITIES ── */
+  .scrollbar-custom::-webkit-scrollbar { width:4px; }
+  .scrollbar-custom::-webkit-scrollbar-track { background:transparent; }
+  .scrollbar-custom::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .loading { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .online-dot { width:8px; height:8px; background:var(--success); border-radius:50%; display:inline-block; margin-right:4px; }
+  .tag { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+  .tag-new { background:rgba(142,168,50,.15); color:var(--primary); }
+
+  /* ══════ MOBILE RESPONSIVE ══════ */
+  @media (max-width: 768px) {
+    /* Layout : sidebar en bas, contenu plein écran */
+    .content { flex-direction:column; }
+    .sidebar {
+      width:100%; height:64px; flex-direction:row; justify-content:space-around;
+      border-right:none; border-top:1px solid var(--border); padding:6px 0 env(safe-area-inset-bottom,4px); gap:0;
+      order:2; flex-shrink:0;
+    }
+    .tab-btn { width:auto; height:auto; font-size:18px; flex-direction:column; gap:2px; padding:4px 12px; border-radius:8px; }
+    .tab-btn::after { content:attr(data-label); font-size:10px; font-weight:600; display:block; }
+    .tab-content { order:1; }
+
+    /* Chat : liste pleine largeur, vue chat plein écran */
+    .chat-layout { flex-direction:column; position:relative; }
+    .chat-list { width:100%; border-right:none; }
+    .chat-view { position:absolute; inset:0; z-index:10; display:none; background:var(--bg); }
+    .chat-view.mobile-open { display:flex; }
+    .chat-placeholder { display:none; }
+    .mobile-back-btn { display:block!important; }
+
+    /* Marketplace : grille 2 colonnes */
+    .products-grid { grid-template-columns:repeat(2,1fr)!important; gap:10px!important; padding:10px!important; }
+    .product-img { height:110px; }
+    .product-name { font-size:12px; }
+    .product-price { font-size:13px; }
+    .product-seller { font-size:10px; }
+    .product-buy-btn { font-size:10px; padding:4px 8px; }
+    .product-desc { display:none; }
+
+    /* Wallet */
+    .wallet-card { border-radius:16px; }
+    .wallet-actions { flex-direction:column; gap:8px; }
+
+    /* Topbar */
+    .topbar-title { font-size:15px; }
+
+    /* Modals */
+    .modal { max-width:95vw; padding:18px; border-radius:16px; }
+
+    /* Search & categories marketplace */
+    #market-categories { gap:6px; }
+    .cat-btn { padding:5px 10px!important; font-size:11px!important; }
+  }
+
+  @media (max-width: 400px) {
+    .products-grid { grid-template-columns:1fr!important; }
+    .sidebar .tab-btn { width:40px; height:40px; font-size:16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════ LOGIN ════════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="logo">
+    <h1>⚡ Konekta</h1>
+    <p>Chat · Paiement Wave · Marketplace</p>
+  </div>
+
+  <div class="login-card" id="step-phone">
+    <h2>📱 Connexion</h2>
+    <div class="form-group">
+      <label>Numéro de téléphone</label>
+      <input type="tel" id="phone-input" placeholder="+221 77 000 00 00" autocomplete="tel">
+    </div>
+    <button class="btn btn-primary" onclick="sendOtp()" id="otp-btn">Recevoir le code OTP</button>
+    <p class="msg" id="phone-msg"></p>
+  </div>
+
+  <div class="login-card" id="step-otp" style="display:none">
+    <h2>🔐 Code de vérification</h2>
+    <div class="otp-hint" id="otp-hint">Code de test : <strong id="otp-debug"></strong></div>
+    <div class="form-group">
+      <label>Code OTP (4 chiffres)</label>
+      <input type="number" id="otp-input" placeholder="1234" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px">
+    </div>
+    <button class="btn btn-primary" onclick="verifyOtp()" id="verify-btn">Vérifier</button>
+    <button class="btn btn-secondary" onclick="backToPhone()" style="margin-top:8px">← Retour</button>
+    <p class="msg" id="otp-msg"></p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ APP ════════════════════════════════════════ -->
+<div id="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">⚡</span>
+      <span class="topbar-title" id="topbar-title">Konekta</span>
+    </div>
+    <div class="topbar-right">
+      <span id="online-badge" style="font-size:12px;color:var(--text2);display:none">
+        <span class="online-dot"></span>En ligne
+      </span>
+      <div class="avatar-sm" id="user-avatar" onclick="switchTab('profile')">K</div>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="content">
+    <!-- SIDEBAR TABS -->
+    <div class="sidebar">
+      <button class="tab-btn active" onclick="switchTab('chat')" data-tab="chat" data-label="Chat" title="Chat">💬
+        <span class="badge" id="chat-badge"></span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('marketplace')" data-tab="marketplace" data-label="Marché" title="Marketplace">🛍️</button>
+      <button class="tab-btn" onclick="switchTab('wallet')" data-tab="wallet" data-label="Wallet" title="Wallet">💳</button>
+      <button class="tab-btn" onclick="switchTab('profile')" data-tab="profile" data-label="Profil" title="Profil">👤</button>
+    </div>
+
+    <!-- ── TAB: CHAT ── -->
+    <div class="tab-content active scrollbar-custom" id="tab-chat">
+      <div class="chat-layout">
+        <!-- Chat List -->
+        <div class="chat-list">
+          <div class="chat-list-header">
+            <h3>Messages</h3>
+            <div class="search-box">
+              <span>🔍</span>
+              <input type="text" id="search-phone" placeholder="Chercher par téléphone..." oninput="searchContact()">
+            </div>
+          </div>
+          <div class="chat-items scrollbar-custom" id="chat-items"></div>
+          <div style="margin:12px;display:flex;gap:8px">
+            <button class="new-chat-btn" onclick="openNewChatModal()" style="flex:1;margin:0">+ Conversation</button>
+            <button class="new-chat-btn" onclick="openNewGroupModal()" style="flex:1;margin:0;background:var(--wave)">👥 Groupe</button>
+          </div>
+        </div>
+
+        <!-- Chat View -->
+        <div class="chat-view" id="chat-view">
+          <div class="chat-placeholder">
+            <div class="icon">💬</div>
+            <p>Sélectionnez une conversation</p>
+            <p style="font-size:12px;margin-top:6px">ou cherchez un contact par numéro</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: MARKETPLACE ── -->
+    <div class="tab-content scrollbar-custom" id="tab-marketplace" style="flex-direction:column">
+      <div class="marketplace-header">
+        <h3>🛍️ Marketplace</h3>
+        <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="openAddProductModal()">+ Vendre</button>
+      </div>
+      <!-- Recherche + Catégories -->
+      <div style="padding:12px 16px 0">
+        <div class="search-box" style="margin-bottom:10px">
+          <span>🔍</span>
+          <input type="text" id="market-search" placeholder="Rechercher un produit..." oninput="filterProducts()">
+        </div>
+        <div id="market-categories" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none">
+          <button class="cat-btn active" onclick="filterByCategory('all',this)" style="background:var(--primary);color:#fff;border:none;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">Tout</button>
+          <button class="cat-btn" onclick="filterByCategory('Électronique',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">📱 Électronique</button>
+          <button class="cat-btn" onclick="filterByCategory('Véhicules',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🚗 Véhicules</button>
+          <button class="cat-btn" onclick="filterByCategory('Immobilier',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🏠 Immobilier</button>
+          <button class="cat-btn" onclick="filterByCategory('Mode',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">👗 Mode</button>
+          <button class="cat-btn" onclick="filterByCategory('Alimentation',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🍽️ Alimentation</button>
+          <button class="cat-btn" onclick="filterByCategory('Maison',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🛋️ Maison</button>
+          <button class="cat-btn" onclick="filterByCategory('Beauté',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">💄 Beauté</button>
+          <button class="cat-btn" onclick="filterByCategory('Sports',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">⚽ Sports</button>
+          <button class="cat-btn" onclick="filterByCategory('Artisanat',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🎨 Artisanat</button>
+          <button class="cat-btn" onclick="filterByCategory('Services',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🔧 Services</button>
+          <button class="cat-btn" onclick="filterByCategory('Agriculture',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🌾 Agriculture</button>
+        </div>
+      </div>
+      <div class="products-grid scrollbar-custom" id="products-grid">
+        <div class="empty-state" style="grid-column:1/-1">
+          <div class="icon">🛒</div>
+          <p>Chargement des produits...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: WALLET ── -->
+    <div class="tab-content scrollbar-custom" id="tab-wallet" style="flex-direction:column">
+      <div class="wallet-content scrollbar-custom" id="wallet-content">
+        <div class="wallet-card">
+          <div class="wallet-card-label">💳 Wave Money</div>
+          <div class="wallet-card-count" id="wallet-tx-count">— transactions</div>
+          <div class="wallet-card-sub" id="wallet-total">Chargement...</div>
+        </div>
+        <div class="wallet-section-title">Historique des paiements</div>
+        <div class="tx-list" id="tx-list">
+          <div style="text-align:center;color:var(--text2);padding:20px">Chargement...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: PROFILE ── -->
+    <div class="tab-content scrollbar-custom" id="tab-profile" style="flex-direction:column">
+      <div class="profile-content scrollbar-custom">
+        <div class="profile-hero">
+          <div class="profile-avatar" id="profile-avatar-big">K</div>
+          <div class="profile-name" id="profile-name-big">Chargement...</div>
+          <div class="profile-phone" id="profile-phone-big">—</div>
+        </div>
+        <!-- Paiement vendeur automatique -->
+        <div class="profile-section" id="solde-section" style="margin-bottom:16px">
+          <div style="padding:16px">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div style="width:36px;height:36px;border-radius:50%;background:rgba(76,175,80,.15);display:flex;align-items:center;justify-content:center;font-size:18px">&#9889;</div>
+              <div style="font-size:13px;font-weight:600;color:var(--text)">Paiement instantan&eacute;</div>
+            </div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">
+              Vos ventes sont pay&eacute;es <strong style="color:var(--success)">automatiquement sur votre Wave</strong> (95% du montant, 5% commission plateforme). Aucun retrait manuel n&eacute;cessaire.
+            </div>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="profile-row" onclick="openEditNameModal()">
+            <div class="profile-row-left">
+              <span class="profile-row-icon">✏️</span>
+              <span class="profile-row-label">Modifier le nom</span>
+            </div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+          <div class="profile-row" onclick="openEditWaveModal()">
+            <div class="profile-row-left">
+              <span class="profile-row-icon">🌊</span>
+              <div>
+                <div class="profile-row-label">Numéro Wave (vendeur)</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:2px" id="profile-wave-display">Non configuré</div>
+              </div>
+            </div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+          <div class="profile-row" onclick="switchTab('wallet')">
+            <div class="profile-row-left">
+              <span class="profile-row-icon">💳</span>
+              <span class="profile-row-label">Mes paiements Wave</span>
+            </div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+          <div class="profile-row" onclick="switchTab('marketplace')">
+            <div class="profile-row-left">
+              <span class="profile-row-icon">🏪</span>
+              <span class="profile-row-label">Mes produits</span>
+            </div>
+            <span class="profile-row-arrow">›</span>
+          </div>
+        </div>
+        <!-- Admin retraits supprimé — Payout Wave automatique -->
+
+        <button class="logout-btn" onclick="logout()">🚪 Se déconnecter</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ MODALS ════════════════ -->
+
+<!-- New Chat -->
+<div class="modal-overlay" id="modal-new-chat">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>💬 Nouvelle conversation</h3>
+      <button class="close-btn" onclick="closeModal('modal-new-chat')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Numéro de téléphone du contact</label>
+      <input type="tel" id="new-chat-phone" placeholder="+221 77 000 00 00">
+    </div>
+    <div id="new-chat-found" style="display:none;background:var(--bg3);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;color:var(--text2)">Contact trouvé</div>
+      <div style="font-size:15px;font-weight:600;margin-top:4px" id="new-chat-found-name"></div>
+    </div>
+    <p class="msg error" id="new-chat-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-chat')">Annuler</button>
+      <button class="btn btn-primary" onclick="startChat()" id="start-chat-btn">Rechercher</button>
+    </div>
+  </div>
+</div>
+
+<!-- Payment -->
+<div class="modal-overlay" id="modal-payment">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>💳 Envoyer via Wave</h3>
+      <button class="close-btn" onclick="closeModal('modal-payment')">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      À : <strong id="pay-to-name">—</strong>
+    </div>
+    <div class="amount-display">
+      <span class="amount-num" id="pay-amount-display">0</span>
+      <span class="amount-unit">FCFA</span>
+    </div>
+    <div class="numpad">
+      <button class="numpad-btn" onclick="numpadPress('1')">1</button>
+      <button class="numpad-btn" onclick="numpadPress('2')">2</button>
+      <button class="numpad-btn" onclick="numpadPress('3')">3</button>
+      <button class="numpad-btn" onclick="numpadPress('4')">4</button>
+      <button class="numpad-btn" onclick="numpadPress('5')">5</button>
+      <button class="numpad-btn" onclick="numpadPress('6')">6</button>
+      <button class="numpad-btn" onclick="numpadPress('7')">7</button>
+      <button class="numpad-btn" onclick="numpadPress('8')">8</button>
+      <button class="numpad-btn" onclick="numpadPress('9')">9</button>
+      <button class="numpad-btn" onclick="numpadPress('000')">000</button>
+      <button class="numpad-btn" onclick="numpadPress('0')">0</button>
+      <button class="numpad-btn del" onclick="numpadDel()">⌫</button>
+    </div>
+    <button class="btn btn-primary" onclick="initWavePayment()" id="wave-pay-btn" style="margin-bottom:8px">
+      Payer avec Wave 🌊
+    </button>
+    <a id="wave-checkout-link" class="checkout-link" href="#" target="_blank" style="display:none">
+      🔗 Ouvrir Wave pour payer
+    </a>
+    <div class="status-banner" id="pay-status-banner"></div>
+    <p style="font-size:11px;color:var(--text2);text-align:center;margin-top:8px" id="pay-ref-display"></p>
+  </div>
+</div>
+
+<!-- Create Group -->
+<div class="modal-overlay" id="modal-new-group">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👥 Créer un groupe</h3>
+      <button class="close-btn" onclick="closeModal('modal-new-group')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nom du groupe *</label>
+      <input type="text" id="group-name" placeholder="Ex: Famille Diallo, Collègues...">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="group-desc" placeholder="Ex: Groupe familial">
+    </div>
+    <div class="form-group">
+      <label>Ajouter des membres (numéros séparés par virgule)</label>
+      <textarea id="group-members" placeholder="Ex: 77 123 45 67, 78 234 56 78" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;min-height:60px;resize:vertical"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Photo du groupe</label>
+      <div style="display:flex;align-items:center;gap:12px">
+        <input type="text" id="group-emoji" value="👥" maxlength="4" style="width:60px;text-align:center;font-size:24px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+        <span style="font-size:12px;color:var(--text2)">Choisissez un emoji</span>
+      </div>
+    </div>
+    <p class="msg" id="group-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-group')">Annuler</button>
+      <button class="btn btn-primary" onclick="createGroup()" id="create-group-btn" style="background:var(--wave)">Créer le groupe</button>
+    </div>
+  </div>
+</div>
+
+<!-- Call Overlay -->
+<div id="call-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,46,26,0.97);z-index:10000;flex-direction:column;align-items:center;justify-content:center;gap:24px">
+  <div id="call-avatar" style="width:100px;height:100px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#fff;font-weight:700;box-shadow:0 0 40px rgba(142,168,50,0.3)"></div>
+  <div id="call-name" style="font-size:1.4rem;font-weight:700;color:#fff"></div>
+  <div id="call-status" style="font-size:0.9rem;color:rgba(255,255,255,0.6)"></div>
+  <div id="call-timer" style="font-size:2rem;font-weight:300;color:rgba(255,255,255,0.8);font-family:monospace"></div>
+  <div style="display:flex;gap:20px;margin-top:24px">
+    <button onclick="toggleMute()" id="call-mute-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer" title="Muet">🎤</button>
+    <button onclick="toggleSpeaker()" id="call-speaker-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer" title="Haut-parleur">🔊</button>
+    <button onclick="endCall()" style="width:64px;height:64px;border-radius:50%;border:none;background:#E74C3C;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.4)" title="Raccrocher">📞</button>
+    <button onclick="toggleVideo()" id="call-video-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer;display:none" title="Caméra">📹</button>
+  </div>
+</div>
+
+<!-- Voice Record Indicator -->
+<div id="voice-recording" style="display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid #E74C3C;border-radius:20px;padding:10px 20px;display:none;align-items:center;gap:10px;z-index:1000;box-shadow:0 4px 20px rgba(0,0,0,0.4)">
+  <span style="width:10px;height:10px;border-radius:50%;background:#E74C3C;animation:pulse 1s infinite"></span>
+  <span id="voice-timer" style="font-family:monospace;font-size:14px;color:var(--text)">0:00</span>
+  <button onclick="cancelVoiceRecord()" style="background:none;border:none;color:#E74C3C;font-size:18px;cursor:pointer">✕</button>
+  <button onclick="sendVoiceRecord()" style="background:var(--primary);border:none;color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer">Envoyer</button>
+</div>
+<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
+
+<!-- Add Product -->
+<div class="modal-overlay" id="modal-add-product">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🏪 Mettre en vente</h3>
+      <button class="close-btn" onclick="closeModal('modal-add-product')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nom du produit *</label>
+      <input type="text" id="prod-name" placeholder="Ex: iPhone 13 Pro">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="prod-desc" placeholder="Ex: État neuf, débloqué tous réseaux">
+    </div>
+    <div class="form-group">
+      <label>Catégorie *</label>
+      <select id="prod-category" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+        <option value="">-- Choisir une catégorie --</option>
+        <option value="Électronique">📱 Électronique (Téléphones, Ordinateurs, TV, Tablettes)</option>
+        <option value="Véhicules">🚗 Véhicules (Voitures, Motos, Pièces auto)</option>
+        <option value="Immobilier">🏠 Immobilier (Maisons, Appartements, Terrains)</option>
+        <option value="Mode">👗 Mode (Vêtements, Chaussures, Accessoires, Bijoux)</option>
+        <option value="Alimentation">🍽️ Alimentation (Restaurants, Traiteur, Épicerie)</option>
+        <option value="Maison">🛋️ Maison & Déco (Meubles, Électroménager, Décoration)</option>
+        <option value="Beauté">💄 Beauté & Santé (Cosmétiques, Parfums, Soins)</option>
+        <option value="Sports">⚽ Sports & Loisirs (Équipements, Fitness, Voyages)</option>
+        <option value="Informatique">💻 Informatique (Logiciels, Hébergement, Services IT)</option>
+        <option value="Éducation">📚 Éducation (Cours, Formation, Livres)</option>
+        <option value="Agriculture">🌾 Agriculture (Semences, Matériel, Récoltes)</option>
+        <option value="Artisanat">🎨 Artisanat (Fait main, Art, Tissu Wax)</option>
+        <option value="Services">🔧 Services (Plomberie, Électricité, Ménage, Transport)</option>
+        <option value="Animaux">🐾 Animaux (Bétail, Volaille, Accessoires)</option>
+        <option value="Autre">📦 Autre</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Prix (FCFA) *</label>
+      <input type="number" id="prod-price" placeholder="Ex: 350000" min="100">
+    </div>
+    <div class="form-group">
+      <label>Photo du produit</label>
+      <div id="prod-photo-preview" style="width:100%;height:140px;background:var(--bg3);border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;margin-bottom:8px" onclick="document.getElementById('prod-photo-input').click()">
+        <span id="prod-photo-placeholder" style="font-size:36px">📷</span>
+        <img id="prod-photo-img" style="display:none;width:100%;height:100%;object-fit:cover">
+      </div>
+      <input type="file" id="prod-photo-input" accept="image/*" style="display:none" onchange="onProductPhotoSelected(this)">
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <span style="font-size:12px;color:var(--text2)">Ou emoji :</span>
+        <input type="text" id="prod-emoji" placeholder="📦" maxlength="4" value="📦" style="width:70px;text-align:center">
+      </div>
+    </div>
+    <p class="msg" id="prod-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-product')">Annuler</button>
+      <button class="btn btn-primary" onclick="addProduct()" id="add-prod-btn">Publier</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Product -->
+<div class="modal-overlay" id="modal-edit-product">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Modifier le produit</h3>
+      <button class="close-btn" onclick="closeModal('modal-edit-product')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nom du produit *</label>
+      <input type="text" id="edit-prod-name" placeholder="Ex: iPhone 13 Pro">
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="edit-prod-desc" placeholder="Ex: État neuf">
+    </div>
+    <div class="form-group">
+      <label>Prix (FCFA) *</label>
+      <input type="number" id="edit-prod-price" placeholder="Ex: 350000" min="100">
+    </div>
+    <div class="form-group">
+      <label>Nouvelle photo (optionnel)</label>
+      <div id="edit-photo-preview" style="width:100%;height:120px;background:var(--bg3);border:2px dashed var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;margin-bottom:8px" onclick="document.getElementById('edit-photo-input').click()">
+        <span id="edit-photo-placeholder" style="font-size:30px">📷 Changer la photo</span>
+        <img id="edit-photo-img" style="display:none;width:100%;height:100%;object-fit:cover">
+      </div>
+      <input type="file" id="edit-photo-input" accept="image/*" style="display:none" onchange="onEditPhotoSelected(this)">
+    </div>
+    <p class="msg" id="edit-prod-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" style="color:var(--secondary);border-color:var(--secondary)" onclick="deleteProduct()">🗑 Supprimer</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="closeModal('modal-edit-product')">Annuler</button>
+        <button class="btn btn-primary" onclick="saveProduct()" id="save-prod-btn">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Name -->
+<div class="modal-overlay" id="modal-edit-name">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>✏️ Modifier le nom</h3>
+      <button class="close-btn" onclick="closeModal('modal-edit-name')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nouveau nom</label>
+      <input type="text" id="new-name-input" placeholder="Votre nom...">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-name')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveName()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Retrait supprimé — Payout Wave automatique -->
+
+<!-- Edit Wave Phone -->
+<div class="modal-overlay" id="modal-edit-wave">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🌊 Numéro Wave vendeur</h3>
+      <button class="close-btn" onclick="closeModal('modal-edit-wave')">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+      Ce numéro reçoit automatiquement 95% de chaque vente que vous effectuez sur Konekta.
+    </p>
+    <div class="form-group">
+      <label>Numéro Wave (ex: +221 77 000 00 00)</label>
+      <input type="tel" id="wave-phone-input" placeholder="+221 77 000 00 00">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-edit-wave')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveWavePhone()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Buy Product -->
+<div class="modal-overlay" id="modal-buy-product">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🛒 Acheter ce produit</h3>
+      <button class="close-btn" onclick="closeModal('modal-buy-product')">✕</button>
+    </div>
+    <div style="background:var(--bg3);border-radius:var(--radius);padding:16px;margin-bottom:16px">
+      <div style="font-size:32px;text-align:center;margin-bottom:8px" id="buy-prod-emoji">📦</div>
+      <div style="font-size:16px;font-weight:700;text-align:center" id="buy-prod-name"></div>
+      <div style="font-size:13px;color:var(--text2);text-align:center;margin-top:4px" id="buy-prod-desc"></div>
+      <div style="font-size:24px;font-weight:800;color:var(--wave);text-align:center;margin-top:8px" id="buy-prod-price"></div>
+      <div style="font-size:12px;color:var(--text2);text-align:center;margin-top:4px">Vendeur : <span id="buy-prod-seller"></span></div>
+    </div>
+    <a id="buy-checkout-link" class="checkout-link" href="#" target="_blank" style="display:none">🔗 Ouvrir Wave pour payer</a>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-buy-product')">Annuler</button>
+      <button class="btn btn-primary" onclick="buyProduct()" id="buy-prod-btn">💳 Payer via Wave</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════════════
+const API = 'http://localhost:3000';
+let token = localStorage.getItem('knk_token');
+let me = JSON.parse(localStorage.getItem('knk_user') || 'null');
+let socket = null;
+let currentChat = null; // { userId, name, phone }
+let payAmount = '0';
+let payTarget = null; // { userId, name }
+let buyTargetProduct = null;
+let pollRef = null;    // polling interval for wave status (chat payment)
+let prodPollRef = null; // polling interval for marketplace payment
+let prodPollToken = 0; // invalidate stale async callbacks on modal re-open
+
+// ════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════
+window.onload = () => {
+  if (token && me) {
+    showApp();
+  }
+};
+
+// ════════════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════════════
+async function sendOtp() {
+  const phone = document.getElementById('phone-input').value.trim();
+  const btn = document.getElementById('otp-btn');
+  const msg = document.getElementById('phone-msg');
+  if (!phone) { showMsg('phone-msg', 'Entrez votre numéro', 'error'); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> Envoi...';
+  try {
+    const res = await fetch(`${API}/auth/send-otp`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('step-phone').style.display = 'none';
+      document.getElementById('step-otp').style.display = 'block';
+      if (data.debug_code) {
+        document.getElementById('otp-debug').textContent = data.debug_code;
+        document.getElementById('otp-hint').style.display = 'block';
+        document.getElementById('otp-input').value = data.debug_code;
+      }
+    } else {
+      showMsg('phone-msg', data.message || 'Erreur', 'error');
+    }
+  } catch(e) {
+    showMsg('phone-msg', 'Serveur inaccessible (localhost:3000)', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Recevoir le code OTP';
+}
+
+async function verifyOtp() {
+  const phone = document.getElementById('phone-input').value.trim();
+  const code = document.getElementById('otp-input').value.trim();
+  const btn = document.getElementById('verify-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span>';
+  try {
+    const res = await fetch(`${API}/auth/verify-otp`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone, code })
+    });
+    const data = await res.json();
+    if (data.success) {
+      token = data.token;
+      me = data.user;
+      localStorage.setItem('knk_token', token);
+      localStorage.setItem('knk_user', JSON.stringify(me));
+      showApp();
+    } else {
+      showMsg('otp-msg', data.message || 'Code incorrect', 'error');
+    }
+  } catch(e) {
+    showMsg('otp-msg', 'Erreur serveur', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = 'Vérifier';
+}
+
+function backToPhone() {
+  document.getElementById('step-otp').style.display = 'none';
+  document.getElementById('step-phone').style.display = 'block';
+}
+
+function logout() {
+  localStorage.removeItem('knk_token');
+  localStorage.removeItem('knk_user');
+  if (socket) socket.disconnect();
+  location.reload();
+}
+
+// ════════════════════════════════════════════════════════════
+//  SHOW APP
+// ════════════════════════════════════════════════════════════
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  initSocket();
+  loadProfile();
+  loadChats();
+  loadProducts();
+  loadWallet();
+}
+
+// ════════════════════════════════════════════════════════════
+//  SOCKET.IO
+// ════════════════════════════════════════════════════════════
+function initSocket() {
+  socket = io(API, { transports: ['websocket','polling'] });
+  socket.on('connect', () => {
+    socket.emit('join', me.id);
+    document.getElementById('online-badge').style.display = 'flex';
+  });
+  socket.on('disconnect', () => {
+    document.getElementById('online-badge').style.display = 'none';
+  });
+  socket.on('receiveMessage', (msg) => {
+    if (currentChat && (msg.chatId === getChatId(me.id, currentChat.userId) || msg.chat_id === getChatId(me.id, currentChat.userId))) {
+      appendMessage(msg, false);
+    } else {
+      document.getElementById('chat-badge').classList.add('show');
+    }
+    loadChats();
+  });
+  socket.on('paymentReceived', (data) => {
+    loadWallet();
+    if (currentChat) loadMessages(currentChat);
+  });
+
+  // Mise à jour temps réel de la marketplace
+  socket.on('productUpdate', ({ action, product, productId }) => {
+    if (action === 'removed') {
+      window._products = (window._products || []).filter(p => p.id !== productId);
+      loadProducts();
+    } else if (action === 'added' || action === 'updated') {
+      loadProducts();
+    }
+  });
+  socket.on('userTyping', ({ senderId }) => {
+    if (currentChat && senderId === currentChat.userId) {
+      document.getElementById('typing-indicator') && (document.getElementById('typing-indicator').textContent = `${currentChat.name || currentChat.userId.slice(0,8)} écrit...`);
+    }
+  });
+  socket.on('userStopTyping', () => {
+    document.getElementById('typing-indicator') && (document.getElementById('typing-indicator').textContent = '');
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  PROFILE
+// ════════════════════════════════════════════════════════════
+async function loadProfile() {
+  try {
+    const data = await apiFetch('/users/me');
+    me = { ...me, ...data };
+    localStorage.setItem('knk_user', JSON.stringify(me));
+    const initial = (me.name || me.phone || 'K').charAt(0).toUpperCase();
+    document.getElementById('user-avatar').textContent = initial;
+    document.getElementById('profile-avatar-big').textContent = initial;
+    document.getElementById('profile-name-big').textContent = me.name || '(sans nom)';
+    document.getElementById('profile-phone-big').textContent = me.phone || '—';
+    const waveDisplay = document.getElementById('profile-wave-display');
+    if (waveDisplay) waveDisplay.textContent = me.wave_phone || 'Non configuré';
+  } catch(e) {}
+  loadSolde();
+}
+
+let _soldeInterval = null;
+function startSoldePolling() {
+  stopSoldePolling();
+  _soldeInterval = setInterval(loadSolde, 15000);
+}
+function stopSoldePolling() {
+  if (_soldeInterval) { clearInterval(_soldeInterval); _soldeInterval = null; }
+}
+
+async function loadSolde() {
+  try {
+    const { solde } = await apiFetch('/payments/solde');
+    const el = document.getElementById('profile-solde-display');
+    if (el) el.textContent = (solde || 0).toLocaleString('fr-FR');
+  } catch(e) {}
+  loadWithdrawals();
+  loadAdminWithdrawals();
+}
+
+async function loadWithdrawals() {
+  try {
+    const list = await apiFetch('/withdrawals/me');
+    const el = document.getElementById('withdrawals-list');
+    if (!el) return;
+    if (!list || list.length === 0) {
+      el.innerHTML = '<div style="padding:8px 0;color:var(--text2)">Aucun retrait</div>';
+      return;
+    }
+    const statusLabel = { en_attente: '⏳', traitee: '✅', refusee: '❌' };
+    el.innerHTML = list.slice(0, 5).map(w => {
+      const d = new Date(w.created_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short' });
+      return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span>${statusLabel[w.statut] || ''} ${w.montant.toLocaleString('fr-FR')} FCFA</span>
+        <span style="color:var(--text2)">${d}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+function openRetraitModal() {
+  const soldeEl = document.getElementById('profile-solde-display');
+  const solde = soldeEl ? soldeEl.textContent.replace(/\s/g, '') : '0';
+  document.getElementById('retrait-solde-display').textContent = solde + ' FCFA';
+  document.getElementById('retrait-montant').value = '';
+  document.getElementById('retrait-wave').value = me.wave_phone || '';
+  openModal('modal-retrait');
+}
+
+async function soumettreRetrait() {
+  const montant = document.getElementById('retrait-montant').value.trim();
+  const wave_phone = document.getElementById('retrait-wave').value.replace(/\s+/g, '');
+  if (!montant || parseInt(montant) < 500) { alert('Montant minimum 500 FCFA'); return; }
+  if (!wave_phone) { alert('Numéro Wave requis'); return; }
+  try {
+    const result = await apiFetch('/withdrawals', 'POST', { montant: parseInt(montant), wave_phone });
+    if (result.auto) {
+      alert(`✅ Virement effectué ! ${parseInt(montant).toLocaleString('fr-FR')} FCFA envoyés sur ${wave_phone}.`);
+    } else {
+      alert('Demande de retrait enregistrée. Vous recevrez votre argent dès validation.');
+    }
+    closeModal('modal-retrait');
+    loadSolde();
+    loadAdminWithdrawals();
+  } catch(e) { alert('Erreur : ' + (e.message || 'inconnue')); }
+}
+
+// ── ADMIN RETRAITS ──────────────────────────────────────────
+const ADMIN_PHONES = ['787850101']; // numéros admin
+
+async function loadAdminWithdrawals() {
+  const section = document.getElementById('admin-withdrawals-section');
+  if (!section) return;
+  // Afficher seulement pour les admins
+  const phone = me?.phone?.replace(/\D/g, '').slice(-9);
+  if (!ADMIN_PHONES.some(p => p.slice(-9) === phone)) return;
+  section.style.display = 'block';
+
+  try {
+    const list = await apiFetch('/withdrawals');
+    const el = document.getElementById('admin-withdrawals-list');
+    const pending = list.filter(w => w.statut === 'en_attente');
+
+    if (pending.length === 0) {
+      el.innerHTML = '<div style="padding:14px 16px;color:var(--text2);font-size:13px">Aucune demande en attente</div>';
+      return;
+    }
+
+    el.innerHTML = pending.map(w => {
+      const nom = w.user?.name || w.user?.phone || w.user_id?.slice(0,8);
+      const d = new Date(w.created_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+      return `<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600;font-size:14px">${nom}</div>
+            <div style="font-size:12px;color:var(--text2)">${d} · Wave : ${w.wave_phone}</div>
+          </div>
+          <div style="font-size:18px;font-weight:800;color:var(--success)">${w.montant.toLocaleString('fr-FR')} FCFA</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="traiterRetrait('${w.id}')" style="flex:1;padding:8px;background:var(--success);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">
+            ✅ Virer via Wave
+          </button>
+          <button onclick="refuserRetrait('${w.id}')" style="flex:1;padding:8px;background:rgba(255,101,132,.15);border:1px solid rgba(255,101,132,.3);border-radius:8px;color:var(--secondary);font-size:13px;font-weight:600;cursor:pointer">
+            ❌ Refuser
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function traiterRetrait(id) {
+  if (!confirm('Confirmer le virement Wave pour ce retrait ?')) return;
+  try {
+    const result = await apiFetch(`/withdrawals/${id}/process`, 'POST');
+    alert(`✅ Virement effectué : ${result.montant?.toLocaleString('fr-FR')} FCFA → ${result.wave_phone}`);
+    loadAdminWithdrawals();
+    loadSolde();
+  } catch(e) { alert('Erreur : ' + (e.message || 'inconnue')); }
+}
+
+async function refuserRetrait(id) {
+  const note = prompt('Motif du refus (optionnel) :') || 'Refusé par admin';
+  try {
+    await apiFetch(`/withdrawals/${id}/refuse`, 'POST', { note });
+    loadAdminWithdrawals();
+  } catch(e) { alert('Erreur : ' + (e.message || 'inconnue')); }
+}
+
+function openEditNameModal() {
+  document.getElementById('new-name-input').value = me.name || '';
+  openModal('modal-edit-name');
+}
+
+async function saveName() {
+  const name = document.getElementById('new-name-input').value.trim();
+  if (!name) return;
+  try {
+    await apiFetch('/users/me', 'PUT', { name });
+    me.name = name;
+    localStorage.setItem('knk_user', JSON.stringify(me));
+    loadProfile();
+    closeModal('modal-edit-name');
+  } catch(e) {}
+}
+
+function openEditWaveModal() {
+  document.getElementById('wave-phone-input').value = me.wave_phone || '';
+  openModal('modal-edit-wave');
+}
+
+async function saveWavePhone() {
+  const wave_phone = document.getElementById('wave-phone-input').value.trim();
+  try {
+    await apiFetch('/users/me', 'PUT', { wave_phone: wave_phone || null });
+    me.wave_phone = wave_phone || null;
+    localStorage.setItem('knk_user', JSON.stringify(me));
+    loadProfile();
+    closeModal('modal-edit-wave');
+  } catch(e) { alert('Erreur lors de la sauvegarde'); }
+}
+
+// ════════════════════════════════════════════════════════════
+//  CHAT
+// ════════════════════════════════════════════════════════════
+function getChatId(a, b) {
+  return [a, b].sort().join('_');
+}
+
+async function loadChats() {
+  try {
+    const data = await apiFetch('/messages/chats/list');
+    const el = document.getElementById('chat-items');
+    if (!data || !data.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">💬</div><p>Aucune conversation</p><p style="font-size:12px;margin-top:4px">Cherchez un contact pour démarrer</p></div>';
+      return;
+    }
+    el.innerHTML = data.map(chat => {
+      const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
+      const preview = chat.type === 'payment' ? '💳 Paiement Wave' : (chat.content || '...');
+      return `<div class="chat-item" onclick="openChatById('${otherId}')" data-other="${otherId}">
+        <div class="chat-avatar">${(otherId||'?').charAt(0).toUpperCase()}</div>
+        <div class="chat-item-info">
+          <div class="chat-item-name">${otherId.slice(0,8)}...</div>
+          <div class="chat-item-last">${preview.substring(0,40)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+// ════════════════════════════════════════════════════════════
+//  APPELS VOCAUX / VIDÉO
+// ════════════════════════════════════════════════════════════
+let _callTimer = null;
+let _callSeconds = 0;
+let _callMuted = false;
+let _callSpeaker = false;
+
+function startCall(type) {
+  if (!currentChat) return;
+  const overlay = document.getElementById('call-overlay');
+  overlay.style.display = 'flex';
+  document.getElementById('call-avatar').textContent = (currentChat.name || '?').charAt(0).toUpperCase();
+  document.getElementById('call-name').textContent = currentChat.name || currentChat.phone || 'Contact';
+  document.getElementById('call-status').textContent = type === 'video' ? 'Appel vidéo en cours...' : 'Appel en cours...';
+  document.getElementById('call-video-btn').style.display = type === 'video' ? 'block' : 'none';
+  _callSeconds = 0;
+  document.getElementById('call-timer').textContent = '0:00';
+  // Simuler la connexion après 2s
+  setTimeout(() => {
+    document.getElementById('call-status').textContent = type === 'video' ? '📹 Vidéo connectée' : '🔊 Connecté';
+    _callTimer = setInterval(() => {
+      _callSeconds++;
+      const m = Math.floor(_callSeconds / 60);
+      const s = _callSeconds % 60;
+      document.getElementById('call-timer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+  }, 2000);
+}
+
+function endCall() {
+  clearInterval(_callTimer);
+  _callTimer = null;
+  document.getElementById('call-overlay').style.display = 'none';
+  if (_callSeconds > 0) {
+    // Ajouter un message d'appel dans le chat
+    const duration = Math.floor(_callSeconds / 60) + ':' + (_callSeconds % 60 < 10 ? '0' : '') + (_callSeconds % 60);
+    showMsg('', 'Appel terminé (' + duration + ')', 'info');
+  }
+}
+
+function toggleMute() {
+  _callMuted = !_callMuted;
+  document.getElementById('call-mute-btn').style.background = _callMuted ? '#E74C3C' : 'rgba(255,255,255,0.12)';
+  document.getElementById('call-mute-btn').textContent = _callMuted ? '🔇' : '🎤';
+}
+
+function toggleSpeaker() {
+  _callSpeaker = !_callSpeaker;
+  document.getElementById('call-speaker-btn').style.background = _callSpeaker ? 'var(--primary)' : 'rgba(255,255,255,0.12)';
+}
+
+function toggleVideo() {
+  document.getElementById('call-video-btn').style.background = document.getElementById('call-video-btn').style.background === 'var(--primary)' ? 'rgba(255,255,255,0.12)' : 'var(--primary)';
+}
+
+// ════════════════════════════════════════════════════════════
+//  MESSAGES VOCAUX
+// ════════════════════════════════════════════════════════════
+let _voiceRecording = false;
+let _voiceTimer = null;
+let _voiceSeconds = 0;
+let _mediaRecorder = null;
+let _audioChunks = [];
+
+function toggleVoiceRecord() {
+  if (_voiceRecording) {
+    sendVoiceRecord();
+    return;
+  }
+  // Démarrer l'enregistrement
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    _voiceRecording = true;
+    _audioChunks = [];
+    _mediaRecorder = new MediaRecorder(stream);
+    _mediaRecorder.ondataavailable = e => _audioChunks.push(e.data);
+    _mediaRecorder.start();
+    _voiceSeconds = 0;
+    document.getElementById('voice-recording').style.display = 'flex';
+    document.getElementById('voice-record-btn').style.background = '#E74C3C';
+    document.getElementById('voice-record-btn').textContent = '⏹';
+    _voiceTimer = setInterval(() => {
+      _voiceSeconds++;
+      const m = Math.floor(_voiceSeconds / 60);
+      const s = _voiceSeconds % 60;
+      document.getElementById('voice-timer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+  }).catch(() => {
+    alert('Accès au microphone refusé');
+  });
+}
+
+function cancelVoiceRecord() {
+  if (_mediaRecorder && _mediaRecorder.state !== 'inactive') _mediaRecorder.stop();
+  if (_mediaRecorder) _mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  _voiceRecording = false;
+  clearInterval(_voiceTimer);
+  document.getElementById('voice-recording').style.display = 'none';
+  document.getElementById('voice-record-btn').style.background = '';
+  document.getElementById('voice-record-btn').textContent = '🎤';
+}
+
+function sendVoiceRecord() {
+  if (!_mediaRecorder) return;
+  _mediaRecorder.onstop = () => {
+    const blob = new Blob(_audioChunks, { type: 'audio/webm' });
+    // Envoyer comme message vocal (pour l'instant, simuler)
+    const duration = Math.floor(_voiceSeconds / 60) + ':' + (_voiceSeconds % 60 < 10 ? '0' : '') + (_voiceSeconds % 60);
+    if (currentChat) {
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput) { chatInput.value = '🎤 Message vocal (' + duration + ')'; sendMessage(); }
+    }
+    _mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  };
+  _mediaRecorder.stop();
+  _voiceRecording = false;
+  clearInterval(_voiceTimer);
+  document.getElementById('voice-recording').style.display = 'none';
+  document.getElementById('voice-record-btn').style.background = '';
+  document.getElementById('voice-record-btn').textContent = '🎤';
+}
+
+// ════════════════════════════════════════════════════════════
+//  PIÈCES JOINTES
+// ════════════════════════════════════════════════════════════
+function attachFile() {
+  document.getElementById('file-attach-input').click();
+}
+
+function onFileAttached(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const name = file.name;
+  const size = (file.size / 1024).toFixed(0) + ' Ko';
+  if (currentChat) {
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput) { chatInput.value = '📎 ' + name + ' (' + size + ')'; sendMessage(); }
+  }
+  input.value = '';
+}
+
+// ════════════════════════════════════════════════════════════
+//  GROUPES
+// ════════════════════════════════════════════════════════════
+function openNewGroupModal() {
+  document.getElementById('group-name').value = '';
+  document.getElementById('group-desc').value = '';
+  document.getElementById('group-members').value = '';
+  document.getElementById('group-emoji').value = '👥';
+  document.getElementById('group-msg').textContent = '';
+  openModal('modal-new-group');
+}
+
+async function createGroup() {
+  const name = document.getElementById('group-name').value.trim();
+  const desc = document.getElementById('group-desc').value.trim();
+  const members = document.getElementById('group-members').value.trim();
+  if (!name) { showMsg('group-msg', 'Nom du groupe requis', 'error'); return; }
+  const btn = document.getElementById('create-group-btn');
+  btn.disabled = true; btn.textContent = 'Création...';
+  try {
+    // Créer le groupe via l'API (si backend disponible)
+    await apiFetch('/messages/group', 'POST', {
+      name, description: desc,
+      members: members.split(',').map(m => m.trim()).filter(Boolean)
+    });
+    closeModal('modal-new-group');
+    loadChats();
+    showMsg('', 'Groupe "' + name + '" créé !', 'success');
+  } catch(e) {
+    // Fallback : créer localement
+    showMsg('group-msg', 'Groupe créé localement (backend indisponible)', 'info');
+    closeModal('modal-new-group');
+  }
+  btn.disabled = false; btn.textContent = 'Créer le groupe';
+}
+
+function openNewChatModal() {
+  document.getElementById('new-chat-phone').value = '';
+  document.getElementById('new-chat-found').style.display = 'none';
+  document.getElementById('new-chat-msg').textContent = '';
+  document.getElementById('start-chat-btn').textContent = 'Rechercher';
+  openModal('modal-new-chat');
+}
+
+async function searchContact() {
+  const phone = document.getElementById('search-phone').value.trim();
+  // Attendre un numéro complet (min 9 chiffres) avant de chercher
+  const digits = phone.replace(/\D/g,'');
+  if (digits.length < 9) return;
+  try {
+    const data = await apiFetch(`/users/search?phone=${encodeURIComponent(phone)}`);
+    if (data && data.id) openChat({ userId: data.id, name: data.name || data.phone, phone: data.phone });
+  } catch(e) {}
+}
+
+let foundContact = null;
+async function startChat() {
+  const phone = document.getElementById('new-chat-phone').value.trim();
+  const btn = document.getElementById('start-chat-btn');
+  if (!foundContact) {
+    // Search phase
+    btn.disabled = true; btn.innerHTML = '<span class="loading"></span>';
+    try {
+      const data = await apiFetch(`/users/search?phone=${encodeURIComponent(phone)}`);
+      if (data && data.id) {
+        foundContact = data;
+        document.getElementById('new-chat-found').style.display = 'block';
+        document.getElementById('new-chat-found-name').textContent = data.name || data.phone;
+        btn.textContent = '💬 Démarrer la conversation';
+        document.getElementById('new-chat-msg').textContent = '';
+      } else {
+        showMsg('new-chat-msg', 'Utilisateur non trouvé', 'error');
+      }
+    } catch(e) { showMsg('new-chat-msg', 'Utilisateur non trouvé', 'error'); }
+    btn.disabled = false;
+  } else {
+    // Open chat
+    closeModal('modal-new-chat');
+    openChat({ userId: foundContact.id, name: foundContact.name || foundContact.phone, phone: foundContact.phone });
+    foundContact = null;
+  }
+}
+
+async function openChatById(userId) {
+  try {
+    // Try to get user info from messages
+    openChat({ userId, name: userId.slice(0,8) + '...', phone: '—' });
+  } catch(e) {}
+}
+
+function closeMobileChat() {
+  const view = document.getElementById('chat-view');
+  if (view) view.classList.remove('mobile-open');
+}
+
+function openChat(contact) {
+  currentChat = contact;
+  document.getElementById('chat-badge').classList.remove('show');
+
+  // Mark active in list
+  document.querySelectorAll('.chat-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.other === contact.userId);
+  });
+
+  const view = document.getElementById('chat-view');
+  // Ouvrir en plein écran sur mobile
+  view.classList.add('mobile-open');
+  view.innerHTML = `
+    <div class="chat-header">
+      <button class="icon-btn mobile-back-btn" onclick="closeMobileChat()" title="Retour" style="display:none;font-size:18px">←</button>
+      <div class="chat-avatar" style="width:38px;height:38px;font-size:15px">${(contact.name||'?').charAt(0).toUpperCase()}</div>
+      <div class="chat-header-info">
+        <div class="chat-header-name">${contact.name || contact.userId.slice(0,12)}</div>
+        <div class="chat-header-status" id="chat-status">${contact.phone || ''}</div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="icon-btn" onclick="startCall('audio')" title="Appel vocal">📞</button>
+        <button class="icon-btn" onclick="startCall('video')" title="Appel vidéo">📹</button>
+        <button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l'argent">💳</button>
+      </div>
+    </div>
+    <div class="messages-area scrollbar-custom" id="messages-area"></div>
+    <div class="typing-indicator" id="typing-indicator"></div>
+    <div class="chat-input-area">
+      <button class="icon-btn" id="voice-record-btn" onclick="toggleVoiceRecord()" title="Message vocal" style="width:38px;height:38px;flex-shrink:0;font-size:16px;border-radius:50%">🎤</button>
+      <textarea class="chat-input scrollbar-custom" id="chat-input" placeholder="Message..." rows="1"
+        onkeydown="handleInputKey(event)" oninput="handleTyping()"></textarea>
+      <button class="icon-btn" onclick="attachFile()" title="Fichier" style="width:38px;height:38px;flex-shrink:0;font-size:16px;border-radius:50%">📎</button>
+      <button class="pay-btn" onclick="openPaymentModal()" title="Paiement Wave">💳</button>
+      <button class="send-btn" onclick="sendMessage()">➤</button>
+    </div>
+    <input type="file" id="file-attach-input" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" onchange="onFileAttached(this)">
+  `;
+  loadMessages(contact);
+}
+
+async function loadMessages(contact) {
+  const chatId = getChatId(me.id, contact.userId);
+  try {
+    const data = await apiFetch(`/messages/${chatId}`);
+    const area = document.getElementById('messages-area');
+    if (!area) return;
+    if (!data || !data.length) {
+      area.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px;font-size:13px">Commencez la conversation 👋</div>';
+      return;
+    }
+    area.innerHTML = '';
+    data.forEach(msg => appendMessage(msg, true));
+    area.scrollTop = area.scrollHeight;
+  } catch(e) {}
+}
+
+function appendMessage(msg, isHistory=false) {
+  const area = document.getElementById('messages-area');
+  if (!area) return;
+  // Remove empty placeholder
+  if (!isHistory) {
+    const ph = area.querySelector('[data-placeholder]');
+    if (ph) ph.remove();
+  }
+  const isSent = (msg.sender_id || msg.senderId) === me.id;
+  const time = new Date(msg.created_at || msg.createdAt || Date.now()).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+
+  let html = '';
+  if (msg.type === 'payment') {
+    const pd = msg.payment_data || msg.paymentData || {};
+    const status = pd.status === 'success' ? 'success' : 'pending';
+    const dir = isSent ? 'sent' : 'recv';
+    html = `<div style="align-self:${isSent?'flex-end':'flex-start'}">
+      <div class="msg-payment">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${isSent?'💸 Envoyé':'💰 Reçu'}</div>
+        <div class="pay-amount">${(pd.amount||0).toLocaleString()} FCFA</div>
+        <div class="pay-label">via Wave Money</div>
+        <span class="pay-status ${status}">${status==='success'?'✓ Confirmé':'⏳ En attente'}</span>
+      </div>
+      <div class="msg-time" style="text-align:${isSent?'right':'left'}">${time}</div>
+    </div>`;
+  } else {
+    html = `<div class="msg-bubble ${isSent?'sent':'recv'}">
+      ${escHtml(msg.content || '')}
+      <div class="msg-time">${time}</div>
+    </div>`;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  area.appendChild(wrapper.firstElementChild);
+  if (!isHistory) area.scrollTop = area.scrollHeight;
+}
+
+async function sendMessage() {
+  if (!currentChat) return;
+  const input = document.getElementById('chat-input');
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+  const chatId = getChatId(me.id, currentChat.userId);
+  const msg = {
+    chatId, receiverId: currentChat.userId, type: 'text', content,
+    senderId: me.id, createdAt: new Date().toISOString()
+  };
+  appendMessage({ ...msg, sender_id: me.id, created_at: msg.createdAt }, false);
+  try {
+    await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type: 'text', content });
+    if (socket) socket.emit('sendMessage', { ...msg, receiverId: currentChat.userId });
+    loadChats();
+  } catch(e) {}
+}
+
+function handleInputKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+let typingTimeout = null;
+function handleTyping() {
+  if (!socket || !currentChat) return;
+  socket.emit('typing', { senderId: me.id, receiverId: currentChat.userId });
+  clearTimeout(typingTimeout);
+  typingTimeout = setTimeout(() => {
+    socket.emit('stopTyping', { senderId: me.id, receiverId: currentChat.userId });
+  }, 1500);
+  // Auto-resize textarea
+  const ta = document.getElementById('chat-input');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+}
+
+// ════════════════════════════════════════════════════════════
+//  PAYMENT
+// ════════════════════════════════════════════════════════════
+function openPaymentModal() {
+  if (!currentChat) return;
+  payTarget = { userId: currentChat.userId, name: currentChat.name };
+  payAmount = '0';
+  document.getElementById('pay-amount-display').textContent = '0';
+  document.getElementById('pay-to-name').textContent = currentChat.name || currentChat.userId.slice(0,12);
+  document.getElementById('wave-checkout-link').style.display = 'none';
+  document.getElementById('wave-pay-btn').style.display = 'block';
+  document.getElementById('wave-pay-btn').disabled = false;
+  document.getElementById('wave-pay-btn').textContent = 'Payer avec Wave 🌊';
+  document.getElementById('pay-status-banner').classList.remove('show');
+  document.getElementById('pay-ref-display').textContent = '';
+  if (pollRef) { clearInterval(pollRef); pollRef = null; }
+  openModal('modal-payment');
+}
+
+function numpadPress(val) {
+  if (payAmount === '0') payAmount = val;
+  else if (payAmount.length < 8) payAmount += val;
+  document.getElementById('pay-amount-display').textContent = parseInt(payAmount).toLocaleString();
+}
+
+function numpadDel() {
+  if (payAmount.length <= 1) payAmount = '0';
+  else payAmount = payAmount.slice(0,-1);
+  document.getElementById('pay-amount-display').textContent = parseInt(payAmount).toLocaleString();
+}
+
+async function initWavePayment() {
+  const amount = parseInt(payAmount);
+  if (!amount || amount < 100) { alert('Montant minimum : 100 FCFA'); return; }
+  const btn = document.getElementById('wave-pay-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
+  try {
+    const chatId = currentChat ? getChatId(me.id, currentChat.userId) : null;
+    const data = await apiFetch('/payments/wave/checkout', 'POST', {
+      receiverId: payTarget.userId,
+      amount,
+      chatId,
+      receiverName: payTarget.name,
+      productName: null
+    });
+    if (data.checkout_url) {
+      document.getElementById('wave-checkout-link').href = data.checkout_url;
+      document.getElementById('wave-checkout-link').style.display = 'block';
+      btn.style.display = 'none';
+      document.getElementById('pay-ref-display').textContent = `Ref: ${data.reference}`;
+      // Start polling
+      const banner = document.getElementById('pay-status-banner');
+      banner.className = 'status-banner show pending';
+      banner.textContent = '⏳ En attente du paiement...';
+      pollRef = setInterval(async () => {
+        try {
+          const st = await apiFetch(`/payments/wave/status/${data.reference}`);
+          if (st.status === 'success') {
+            clearInterval(pollRef); pollRef = null;
+            banner.className = 'status-banner show success';
+            banner.textContent = '✅ Paiement confirmé !';
+            document.getElementById('wave-checkout-link').style.display = 'none';
+            loadWallet();
+            if (currentChat) loadMessages(currentChat);
+          } else if (st.status === 'failed') {
+            clearInterval(pollRef); pollRef = null;
+            banner.className = 'status-banner show';
+            banner.style.background = 'rgba(255,101,132,.15)';
+            banner.style.color = 'var(--secondary)';
+            banner.textContent = '❌ Paiement échoué';
+          }
+        } catch(e) {}
+      }, 3000);
+    }
+  } catch(e) {
+    alert('Erreur : ' + e.message);
+    btn.disabled = false; btn.textContent = 'Payer avec Wave 🌊';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  MARKETPLACE
+// ════════════════════════════════════════════════════════════
+let _currentCategory = 'all';
+
+function filterProducts() {
+  const q = (document.getElementById('market-search')?.value || '').toLowerCase().trim();
+  const cards = document.querySelectorAll('#products-grid .product-card');
+  cards.forEach(card => {
+    const name = (card.dataset.name || '').toLowerCase();
+    const cat = (card.dataset.category || '').toLowerCase();
+    const matchSearch = !q || name.includes(q) || cat.includes(q);
+    const matchCat = _currentCategory === 'all' || cat === _currentCategory.toLowerCase();
+    card.style.display = (matchSearch && matchCat) ? '' : 'none';
+  });
+}
+
+function filterByCategory(cat, btn) {
+  _currentCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    b.style.background = 'var(--bg3)';
+    b.style.color = 'var(--text2)';
+    b.style.border = '1px solid var(--border)';
+  });
+  if (btn) {
+    btn.style.background = 'var(--primary)';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+  }
+  filterProducts();
+}
+
+async function loadProducts() {
+  try {
+    let data;
+    try {
+      data = await apiFetch('/products');
+    } catch(apiErr) {
+      // Fallback Supabase direct si backend indisponible
+      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      const r = await fetch(sbUrl + '/rest/v1/konekta_products?available=eq.true&order=created_at.desc&select=*,seller:konekta_users!seller_id(id,name,phone)', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      data = await r.json();
+    }
+    const grid = document.getElementById('products-grid');
+    if (!data || !data.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🛒</div><p>Aucun produit disponible</p><p style="font-size:12px;margin-top:4px">Soyez le premier à vendre !</p></div>';
+      return;
+    }
+    grid.innerHTML = data.map(p => {
+      const isMine = p.seller_id === me.id;
+      const isUrl = p.image && p.image.startsWith('http');
+      const imgContent = isUrl
+        ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+          + `<span style="display:none;align-items:center;justify-content:center;font-size:36px;width:100%;height:100%">📦</span>`
+        : `<span style="font-size:36px">${p.image || '📦'}</span>`;
+      const sellerName = p.seller?.name || p.seller?.phone || 'Vendeur';
+      const pid = p.id;
+      const cardClick  = isMine ? "openEditProductModal('" + pid + "')" : "openBuyModal('" + pid + "')";
+      const actionBtn  = isMine
+        ? "<button class='product-buy-btn' style='background:var(--bg3);color:var(--text1);border:1px solid var(--border)' onclick='event.stopPropagation();openEditProductModal(\"" + pid + "\")'>✏️ Modifier</button>"
+        : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>Acheter</button>";
+      return `<div class="product-card" data-name="${escHtml(p.name)}" data-category="${escHtml(p.category||'')}" onclick="${cardClick}">
+        <div class="product-img" style="${isUrl?'padding:0;overflow:hidden':''}">${imgContent}</div>
+        <div class="product-info">
+          <div class="product-name">${escHtml(p.name)}</div>
+          <div class="product-desc">${escHtml(p.description || '')}</div>
+          <div class="product-footer">
+            <div>
+              <div class="product-price">${p.price.toLocaleString()} F</div>
+              <div class="product-seller">${escHtml(sellerName)}</div>
+            </div>
+            ${actionBtn}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    // Store for buy modal
+    window._products = data;
+  } catch(e) {
+    document.getElementById('products-grid').innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">⚠️</div><p>Erreur de chargement</p></div>';
+  }
+}
+
+function openAddProductModal() {
+  document.getElementById('prod-name').value = '';
+  document.getElementById('prod-desc').value = '';
+  document.getElementById('prod-price').value = '';
+  document.getElementById('prod-emoji').value = '📦';
+  document.getElementById('prod-msg').textContent = '';
+  openModal('modal-add-product');
+}
+
+let _prodPhotoBase64 = null;
+let _prodPhotoMime   = null;
+
+function onProductPhotoSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('Image trop grande (max 5MB)'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    _prodPhotoBase64 = dataUrl.split(',')[1];
+    _prodPhotoMime   = file.type;
+    document.getElementById('prod-photo-placeholder').style.display = 'none';
+    const img = document.getElementById('prod-photo-img');
+    img.src = dataUrl; img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function addProduct() {
+  const name = document.getElementById('prod-name').value.trim();
+  const description = document.getElementById('prod-desc').value.trim();
+  const price = document.getElementById('prod-price').value;
+  const category = document.getElementById('prod-category').value;
+  const emoji = document.getElementById('prod-emoji').value.trim();
+  const btn = document.getElementById('add-prod-btn');
+  if (!name || !price) { showMsg('prod-msg', 'Nom et prix requis', 'error'); return; }
+  if (!category) { showMsg('prod-msg', 'Veuillez choisir une catégorie', 'error'); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Publication...';
+  try {
+    let image = emoji || '📦';
+    // Upload photo si sélectionnée
+    if (_prodPhotoBase64) {
+      btn.innerHTML = '<span class="loading"></span> Upload photo...';
+      const up = await apiFetch('/products/upload-image', 'POST', {
+        base64: _prodPhotoBase64, mimeType: _prodPhotoMime, filename: 'product'
+      });
+      image = up.url;
+    }
+    try {
+      await apiFetch('/products', 'POST', { name, description, price: parseInt(price), image, category });
+    } catch(apiErr) {
+      // Fallback Supabase direct
+      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      await fetch(sbUrl + '/rest/v1/konekta_products', {
+        method: 'POST',
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ name, description, price: parseInt(price), image, category, seller_id: me.id, available: true })
+      });
+    }
+    // Reset
+    _prodPhotoBase64 = null; _prodPhotoMime = null;
+    document.getElementById('prod-photo-img').style.display = 'none';
+    document.getElementById('prod-photo-placeholder').style.display = 'block';
+    document.getElementById('prod-photo-input').value = '';
+    closeModal('modal-add-product');
+    loadProducts();
+  } catch(e) { showMsg('prod-msg', e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Publier';
+}
+
+let _editProductId   = null;
+let _editPhotoBase64 = null;
+let _editPhotoMime   = null;
+
+function onEditPhotoSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { alert('Image trop grande (max 5MB)'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    _editPhotoBase64 = e.target.result.split(',')[1];
+    _editPhotoMime   = file.type;
+    document.getElementById('edit-photo-placeholder').style.display = 'none';
+    const img = document.getElementById('edit-photo-img');
+    img.src = e.target.result; img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function openEditProductModal(productId) {
+  const p = (window._products || []).find(x => x.id === productId);
+  if (!p) return;
+  _editProductId = productId;
+  _editPhotoBase64 = null; _editPhotoMime = null;
+  document.getElementById('edit-prod-name').value  = p.name || '';
+  document.getElementById('edit-prod-desc').value  = p.description || '';
+  document.getElementById('edit-prod-price').value = p.price || '';
+  document.getElementById('edit-prod-msg').textContent = '';
+  // Afficher photo actuelle
+  const img = document.getElementById('edit-photo-img');
+  const placeholder = document.getElementById('edit-photo-placeholder');
+  if (p.image && p.image.startsWith('http')) {
+    img.src = p.image; img.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    placeholder.style.display = 'block';
+    placeholder.textContent = p.image || '📷 Changer la photo';
+  }
+  document.getElementById('edit-photo-input').value = '';
+  openModal('modal-edit-product');
+}
+
+async function saveProduct() {
+  if (!_editProductId) return;
+  const name  = document.getElementById('edit-prod-name').value.trim();
+  const desc  = document.getElementById('edit-prod-desc').value.trim();
+  const price = document.getElementById('edit-prod-price').value;
+  if (!name || !price) { showMsg('edit-prod-msg', 'Nom et prix requis', 'error'); return; }
+  const btn = document.getElementById('save-prod-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Sauvegarde...';
+  try {
+    let image = undefined;
+    if (_editPhotoBase64) {
+      btn.innerHTML = '<span class="loading"></span> Upload photo...';
+      const up = await apiFetch('/products/upload-image', 'POST', {
+        base64: _editPhotoBase64, mimeType: _editPhotoMime, filename: 'product'
+      });
+      image = up.url;
+    }
+    const body = { name, description: desc, price: parseInt(price) };
+    if (image) body.image = image;
+    await apiFetch(`/products/${_editProductId}`, 'PUT', body);
+    closeModal('modal-edit-product');
+    loadProducts();
+  } catch(e) { showMsg('edit-prod-msg', e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Enregistrer';
+}
+
+async function deleteProduct() {
+  if (!_editProductId) return;
+  if (!confirm('Supprimer ce produit ?')) return;
+  try {
+    await apiFetch(`/products/${_editProductId}`, 'DELETE');
+    closeModal('modal-edit-product');
+    loadProducts();
+  } catch(e) { alert('Erreur : ' + e.message); }
+}
+
+function openBuyModal(productId) {
+  const p = (window._products || []).find(x => x.id === productId);
+  if (!p) return;
+  // Stopper tout polling précédent + invalider callbacks async en cours
+  if (prodPollRef) { clearInterval(prodPollRef); prodPollRef = null; }
+  prodPollToken++; // tout callback de l'ancien polling verra un token différent
+  buyTargetProduct = p;
+  const buyEmojiEl = document.getElementById('buy-prod-emoji');
+  if (p.image && p.image.startsWith('http')) {
+    buyEmojiEl.innerHTML = `<img src="${p.image}" style="width:72px;height:72px;object-fit:cover;border-radius:8px">`;
+  } else {
+    buyEmojiEl.textContent = p.image || '📦';
+  }
+  document.getElementById('buy-prod-name').textContent = p.name;
+  document.getElementById('buy-prod-desc').textContent = p.description || '';
+  document.getElementById('buy-prod-price').textContent = p.price.toLocaleString() + ' FCFA';
+  document.getElementById('buy-prod-seller').textContent = p.seller?.name || p.seller?.phone || '—';
+  document.getElementById('buy-checkout-link').style.display = 'none';
+  document.getElementById('buy-prod-btn').style.display = 'block';
+  document.getElementById('buy-prod-btn').disabled = false;
+  document.getElementById('buy-prod-btn').textContent = '💳 Payer via Wave';
+  openModal('modal-buy-product');
+}
+
+async function buyProduct() {
+  if (!buyTargetProduct) return;
+  const btn = document.getElementById('buy-prod-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
+  try {
+    const data = await apiFetch('/payments/wave/checkout', 'POST', {
+      receiverId:   buyTargetProduct.seller_id,
+      amount:       buyTargetProduct.price,
+      receiverName: buyTargetProduct.seller?.name || 'Vendeur',
+      productName:  buyTargetProduct.name,
+      productId:    buyTargetProduct.id,
+      chatId:       null
+    });
+    if (data.checkout_url) {
+      document.getElementById('buy-checkout-link').href = data.checkout_url;
+      document.getElementById('buy-checkout-link').style.display = 'block';
+      btn.style.display = 'none';
+
+      // Polling statut paiement (toutes les 3s, max 10min)
+      const paidProductId = buyTargetProduct.id;
+      const myToken = prodPollToken; // capturer le token courant
+      let pollCount = 0;
+      if (prodPollRef) clearInterval(prodPollRef);
+      prodPollRef = setInterval(async () => {
+        if (prodPollToken !== myToken) { clearInterval(prodPollRef); prodPollRef = null; return; } // modal changé
+        pollCount++;
+        if (pollCount > 200) { clearInterval(prodPollRef); prodPollRef = null; return; }
+        try {
+          let st = null;
+          // Tenter le backend d'abord, fallback Supabase si inaccessible
+          try {
+            st = await apiFetch(`/payments/wave/status/${data.reference}`);
+          } catch(apiErr) {
+            // Fallback : interroger Supabase directement
+            try {
+              const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+              const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+              const sbRes = await fetch(sbUrl+'/rest/v1/konekta_payments?reference=eq.'+encodeURIComponent(data.reference)+'&select=status&limit=1',{headers:{apikey:sbKey,Authorization:'Bearer '+sbKey}});
+              const rows = await sbRes.json();
+              if(rows&&rows.length>0) st = rows[0];
+            } catch(e2) {}
+          }
+          if (!st) { return; }
+          if (prodPollToken !== myToken) return;
+          if (st.status === 'success') {
+            clearInterval(prodPollRef); prodPollRef = null;
+            document.getElementById('buy-checkout-link').style.display = 'none';
+            btn.style.display = 'block';
+            btn.disabled = true;
+            btn.textContent = '✅ Payé — merci !';
+            window._products = (window._products || []).filter(p => p.id !== paidProductId);
+            loadProducts();
+          } else if (st.status === 'failed') {
+            clearInterval(prodPollRef); prodPollRef = null;
+            btn.style.display = 'block'; btn.disabled = false; btn.textContent = '💳 Réessayer';
+          }
+        } catch(e) {}
+      }, 3000);
+    }
+  } catch(e) { alert('Erreur : ' + e.message); btn.disabled = false; btn.textContent = '💳 Payer via Wave'; }
+}
+
+// ════════════════════════════════════════════════════════════
+//  WALLET
+// ════════════════════════════════════════════════════════════
+async function loadWallet() {
+  try {
+    let data;
+    try { data = await apiFetch('/payments/history'); }
+    catch(apiErr) {
+      const sbUrl='https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      const r=await fetch(sbUrl+'/rest/v1/konekta_payments?or=(sender_id.eq.'+me.id+',receiver_id.eq.'+me.id+')&order=created_at.desc&limit=50&select=*,sender:konekta_users!sender_id(name,phone),receiver:konekta_users!receiver_id(name,phone)',{headers:{apikey:sbKey,Authorization:'Bearer '+sbKey}});
+      data=await r.json();
+    }
+    const success = (data||[]).filter(t => t.status === 'success');
+    const total = success.reduce((s, t) => s + (t.amount||0), 0);
+    document.getElementById('wallet-tx-count').textContent = `${success.length} transaction${success.length>1?'s':''} réussie${success.length>1?'s':''}`;
+    document.getElementById('wallet-total').textContent = `Total envoyé : ${total.toLocaleString()} FCFA`;
+    const list = document.getElementById('tx-list');
+    if (!data || !data.length) {
+      list.innerHTML = '<div style="text-align:center;color:var(--text2);padding:30px">Aucune transaction</div>';
+      return;
+    }
+    list.innerHTML = data.map(tx => {
+      const isSent = tx.sender_id === me.id;
+      const other = isSent ? tx.receiver : tx.sender;
+      const otherName = other?.name || other?.phone || '—';
+      const date = new Date(tx.created_at).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+      const statusClass = tx.status === 'success' ? 'success' : tx.status === 'en_attente' ? 'pending' : 'failed';
+      const statusLabel = tx.status === 'success' ? '✓ Confirmé' : tx.status === 'en_attente' ? '⏳ En attente' : '✕ Échoué';
+      return `<div class="tx-item">
+        <div class="tx-icon ${isSent?'sent':'recv'}">${isSent?'💸':'💰'}</div>
+        <div class="tx-info">
+          <div class="tx-name">${isSent?'Envoyé à ':'Reçu de '}${escHtml(otherName)}</div>
+          <div class="tx-date">${date}</div>
+          <span class="tx-status ${statusClass}">${statusLabel}</span>
+        </div>
+        <div>
+          <div class="tx-amount ${isSent?'sent':'recv'}">${isSent?'-':'+'} ${(isSent ? (tx.amount||0) : (tx.seller_amount||tx.amount||0)).toLocaleString()} F</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+// ════════════════════════════════════════════════════════════
+//  TABS
+// ════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
+  const titles = { chat:'Messages', marketplace:'Marketplace', wallet:'Wallet', profile:'Profil' };
+  document.getElementById('topbar-title').textContent = titles[name] || 'Konekta';
+  if (name === 'wallet') loadWallet();
+  if (name === 'marketplace') loadProducts();
+  if (name === 'profile') { loadSolde(); startSoldePolling(); }
+  else stopSoldePolling();
+}
+
+// ════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════
+async function apiFetch(path, method='GET', body=null) {
+  const opts = { method, headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API}${path}`, opts);
+  if (res.status === 401) { logout(); return; }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || `Erreur ${res.status}`);
+  return data;
+}
+
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+  if (id === 'modal-new-chat') foundContact = null;
+  if (id === 'modal-payment' && pollRef) { clearInterval(pollRef); pollRef = null; }
+  if (id === 'modal-buy-product' && prodPollRef) { clearInterval(prodPollRef); prodPollRef = null; }
+}
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(overlay.id); });
+});
+
+function showMsg(id, text, type='') {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = `msg ${type}`;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Enter key on login inputs
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (document.getElementById('step-phone').style.display !== 'none') sendOtp();
+    else if (document.getElementById('step-otp').style.display !== 'none') verifyOtp();
+  }
+});
+</script>
+</body>
+</html>
