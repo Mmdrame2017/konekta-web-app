@@ -1335,49 +1335,25 @@ function getChatId(a, b) {
 
 async function loadChats() {
   try {
-    let data;
-    try { data = await apiFetch('/messages/chats/list'); }
-    catch(apiErr) {
-      // Fallback Supabase : chercher par sender_id, receiver_id ET chat_id contenant me.id
-      const sbUrl = SUPA_FB_URL;
-      const sbKey = SUPA_FB_KEY;
-      const myId = me.id || '';
-      let allMsgs = [];
-      try {
-        const h2 = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
-        // Méthode 1 : par sender/receiver ID
-        if (myId) {
-          const r1 = await fetch(sbUrl + '/rest/v1/konekta_messages?or=(sender_id.eq.' + myId + ',receiver_id.eq.' + myId + ')&order=created_at.desc&limit=50', { headers: h2 });
-          const m1 = await r1.json();
-          if (Array.isArray(m1) && m1.length > 0) allMsgs = m1;
-        }
-        // Méthode 2 : par chat_id contenant me.id
-        if (allMsgs.length === 0 && myId) {
-          const r2 = await fetch(sbUrl + '/rest/v1/konekta_messages?chat_id=like.*' + myId + '*&order=created_at.desc&limit=50', { headers: h2 });
-          const m2 = await r2.json();
-          if (Array.isArray(m2) && m2.length > 0) allMsgs = m2;
-        }
-        // Méthode 3 : chercher le vrai UUID via le téléphone, puis recharger
-        if (allMsgs.length === 0 && me.phone) {
-          const digits = me.phone.replace(/\D/g, '');
-          const last9 = digits.slice(-9);
-          const ru = await fetch(sbUrl + '/rest/v1/konekta_users?phone=like.*' + last9 + '&select=id&limit=1', { headers: h2 });
-          const users = await ru.json();
-          if (Array.isArray(users) && users.length > 0 && users[0].id !== myId) {
-            // Corriger me.id
-            me.id = users[0].id;
-            localStorage.setItem('knk_user', JSON.stringify(me));
-            const r3 = await fetch(sbUrl + '/rest/v1/konekta_messages?or=(sender_id.eq.' + me.id + ',receiver_id.eq.' + me.id + ')&order=created_at.desc&limit=50', { headers: h2 });
-            const m3 = await r3.json();
-            if (Array.isArray(m3)) allMsgs = m3;
-          }
-        }
-      } catch(e2) {}
-      // Grouper par chat_id, garder le dernier message
-      const chats = {};
-      (allMsgs || []).forEach(m => { if (!chats[m.chat_id]) chats[m.chat_id] = m; });
-      data = Object.values(chats);
+    const sbH = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
+    const myId = me.id || '';
+    // Charger les messages directement depuis Supabase
+    let allMsgs = [];
+    if (myId) {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_messages?or=(sender_id.eq.' + myId + ',receiver_id.eq.' + myId + ')&order=created_at.desc&limit=100', { headers: sbH });
+      allMsgs = await r.json();
+      if (!Array.isArray(allMsgs)) allMsgs = [];
     }
+    // Fallback : chercher par chat_id
+    if (allMsgs.length === 0 && myId) {
+      const r2 = await fetch(SUPA_FB_URL + '/rest/v1/konekta_messages?chat_id=like.*' + myId + '*&order=created_at.desc&limit=100', { headers: sbH });
+      const m2 = await r2.json();
+      if (Array.isArray(m2)) allMsgs = m2;
+    }
+    // Grouper par chat_id
+    const chats = {};
+    allMsgs.forEach(m => { if (m.chat_id && !chats[m.chat_id]) chats[m.chat_id] = m; });
+    let data = Object.values(chats);
     const el = document.getElementById('chat-items');
     if (!data || !data.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">💬</div><p>Aucune conversation</p><p style="font-size:12px;margin-top:4px">Cherchez un contact pour démarrer</p></div>';
