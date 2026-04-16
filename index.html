@@ -1340,9 +1340,15 @@ async function loadChats() {
     // Charger les messages directement depuis Supabase
     let allMsgs = [];
     if (myId) {
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_messages?or=(sender_id.eq.' + myId + ',receiver_id.eq.' + myId + ')&order=created_at.desc&limit=100', { headers: sbH });
-      allMsgs = await r.json();
+      const url = SUPA_FB_URL + '/rest/v1/konekta_messages?or=(sender_id.eq.' + myId + ',receiver_id.eq.' + myId + ')&order=created_at.desc&limit=100';
+      const r = await fetch(url, { headers: sbH });
+      const txt = await r.text();
+      try { allMsgs = JSON.parse(txt); } catch(e) { allMsgs = []; }
       if (!Array.isArray(allMsgs)) allMsgs = [];
+      // DEBUG temporaire
+      alert('loadChats: myId=' + myId.slice(0,8) + ' | msgs=' + allMsgs.length + ' | status=' + r.status);
+    } else {
+      alert('loadChats: myId est VIDE');
     }
     // Fallback : chercher par chat_id
     if (allMsgs.length === 0 && myId) {
