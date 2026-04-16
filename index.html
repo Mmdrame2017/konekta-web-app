@@ -347,30 +347,32 @@
 
   /* ══════ MOBILE RESPONSIVE ══════ */
   @media (max-width: 768px) {
-    /* Layout : sidebar en bas, contenu plein écran */
-    .content { flex-direction:column; }
+    /* APPROCHE MOBILE : topbar fixe en haut, sidebar fixe en bas, contenu scrolle au milieu */
+    #app { height:auto!important; display:flex!important; flex-direction:column!important; position:fixed!important; inset:0!important; }
+    .topbar { flex-shrink:0; }
+    .content { flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:0; }
     .sidebar {
+      position:fixed; bottom:0; left:0; right:0; z-index:100;
       width:100%; height:64px; flex-direction:row; justify-content:space-around;
       border-right:none; border-top:1px solid var(--border); padding:6px 0 env(safe-area-inset-bottom,4px); gap:0;
-      order:2; flex-shrink:0;
+      background:var(--bg2);
     }
     .tab-btn { width:auto; height:auto; font-size:18px; flex-direction:column; gap:2px; padding:4px 12px; border-radius:8px; }
     .tab-btn::after { content:attr(data-label); font-size:10px; font-weight:600; display:block; }
-    .tab-content { order:1; }
+    .tab-content { flex:1; overflow-y:auto!important; -webkit-overflow-scrolling:touch; min-height:0; padding-bottom:72px; }
 
     /* Chat : liste pleine largeur, vue chat plein écran */
-    .chat-layout { flex-direction:column; position:relative; }
-    .chat-list { width:100%; border-right:none; }
+    .chat-layout { flex-direction:column; position:relative; height:100%; }
+    .chat-list { width:100%; border-right:none; flex:1; overflow-y:auto; }
     .chat-view { position:absolute; inset:0; z-index:10; display:none; background:var(--bg); }
     .chat-view.mobile-open { display:flex; }
     .chat-placeholder { display:none; }
     .mobile-back-btn { display:block!important; }
 
-    /* Marketplace : grille 2 colonnes, scrollable */
-    .products-grid { grid-template-columns:repeat(2,1fr)!important; gap:10px!important; padding:10px!important; overflow-y:auto!important; -webkit-overflow-scrolling:touch; }
+    /* Marketplace : grille 2 colonnes */
+    .products-grid { grid-template-columns:repeat(2,1fr)!important; gap:10px!important; padding:10px!important; }
     .product-card { min-height:0; }
     .product-img { height:120px!important; }
-    .product-img img { width:100%; height:100%; object-fit:cover; }
     .product-name { font-size:13px; }
     .product-price { font-size:14px; }
     .product-seller { font-size:10px; }
