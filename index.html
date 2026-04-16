@@ -1470,15 +1470,6 @@ function stopRingtone() {
 async function startCall(type) {
   if (!currentChat) return;
   _currentCallType = type;
-  const overlay = document.getElementById('call-overlay');
-  overlay.style.display = 'flex';
-  document.getElementById('call-avatar').textContent = (currentChat.name || '?').charAt(0).toUpperCase();
-  document.getElementById('call-name').textContent = currentChat.name || currentChat.phone || 'Contact';
-  document.getElementById('call-status').textContent = 'Appel en cours...';
-  document.getElementById('call-video-btn').style.display = type === 'video' ? 'block' : 'none';
-  document.getElementById('call-switch-cam').style.display = type === 'video' ? 'block' : 'none';
-  document.getElementById('call-timer').textContent = '';
-  _callSeconds = 0;
 
   // Utiliser Jitsi Meet pour les appels (fiable 100%)
   const jitsiRoomId = 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30);
