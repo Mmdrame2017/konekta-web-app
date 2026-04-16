@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Konekta — Super App</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://meet.jit.si/external_api.js"></script>
+<script src="https://meet.jit.si/external_api.js" defer></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -1820,41 +1820,19 @@ function showIncomingCall(call) {
 }
 
 function openJitsiRoom(roomId, callType) {
-  const container = document.getElementById('jitsi-container');
-  if (!container) return;
-  try {
-    window._jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-      roomName: roomId,
-      parentNode: container,
-      width: '100%',
-      height: '100%',
-      configOverwrite: {
-        startWithAudioMuted: false,
-        startWithVideoMuted: callType === 'audio',
-        prejoinConfig: { enabled: false },
-        prejoinPageEnabled: false,
-        disableDeepLinking: true,
-        hideConferenceSubject: true,
-        startAudioOnly: callType === 'audio',
-        enableClosePage: false
-      },
-      interfaceConfigOverwrite: {
-        SHOW_JITSI_WATERMARK: false,
-        SHOW_WATERMARK_FOR_GUESTS: false,
-        SHOW_BRAND_WATERMARK: false,
-        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-        MOBILE_APP_PROMO: false,
-        TOOLBAR_BUTTONS: ['microphone','camera','hangup','fullscreen','tileview','select-background']
-      },
-      userInfo: { displayName: me.name || me.phone || 'Konekta User' }
-    });
-    window._jitsiApi.addEventListener('readyToClose', () => endJitsiCall());
-    window._jitsiApi.addEventListener('videoConferenceLeft', () => endJitsiCall());
-  } catch(e) {
-    // Fallback iframe brut
-    const url = 'https://meet.jit.si/' + roomId + '#config.prejoinConfig.enabled=false&config.startWithVideoMuted=' + (callType === 'audio') + '&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
-    container.innerHTML = '<iframe src="' + url + '" allow="camera;microphone;display-capture;autoplay;clipboard-write" style="width:100%;height:100%;border:none"></iframe>';
-  }
+  // Ouvrir dans un nouvel onglet (fonctionne 100% sur tous les appareils)
+  const params = [
+    'config.prejoinConfig.enabled=false',
+    'config.startWithAudioMuted=false',
+    'config.startWithVideoMuted=' + (callType === 'audio'),
+    'config.disableDeepLinking=true',
+    'userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'Konekta User')
+  ].join('&');
+  const url = 'https://meet.jit.si/' + roomId + '#' + params;
+  window.open(url, '_blank');
+  // Fermer l'overlay
+  const overlay = document.getElementById('call-overlay');
+  if (overlay) { overlay.innerHTML = ''; overlay.style.display = 'none'; }
 }
 
 function endJitsiCall() {
