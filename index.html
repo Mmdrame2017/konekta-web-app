@@ -1899,8 +1899,30 @@ async function addProduct() {
         });
         image = up.url;
       } catch(uploadErr) {
-        // Fallback : utiliser la photo en base64 directement comme data URL
-        image = 'data:' + (_prodPhotoMime || 'image/jpeg') + ';base64,' + _prodPhotoBase64;
+        // Fallback : upload vers Supabase Storage
+        try {
+          const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+          const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+          const ext = (_prodPhotoMime || 'image/jpeg').split('/')[1] || 'jpg';
+          const fileName = 'products/' + Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.' + ext;
+          const byteStr = atob(_prodPhotoBase64);
+          const ab = new ArrayBuffer(byteStr.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+          const blob = new Blob([ab], { type: _prodPhotoMime || 'image/jpeg' });
+          const upRes = await fetch(sbUrl + '/storage/v1/object/konekta-images/' + fileName, {
+            method: 'POST',
+            headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': _prodPhotoMime || 'image/jpeg' },
+            body: blob
+          });
+          if (upRes.ok) {
+            image = sbUrl + '/storage/v1/object/public/konekta-images/' + fileName;
+          } else {
+            image = emoji || '📦';
+          }
+        } catch(storageErr) {
+          image = emoji || '📦';
+        }
       }
     }
     const sellerId = me.id || me.uid || me.user_id || '';
