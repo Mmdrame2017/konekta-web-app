@@ -1335,13 +1335,27 @@ async function loadChats() {
     let data;
     try { data = await apiFetch('/messages/chats/list'); }
     catch(apiErr) {
-      // Fallback Supabase : derniers messages groupés par chat_id
-      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
-      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
-      const r = await fetch(sbUrl + '/rest/v1/konekta_messages?or=(sender_id.eq.' + me.id + ',receiver_id.eq.' + me.id + ')&order=created_at.desc&limit=50', {
-        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
-      });
-      const allMsgs = await r.json();
+      // Fallback Supabase : chercher par sender_id, receiver_id ET chat_id contenant me.id
+      const sbUrl = SUPA_FB_URL;
+      const sbKey = SUPA_FB_KEY;
+      const myId = me.id || '';
+      let allMsgs = [];
+      try {
+        // Méthode 1 : par sender/receiver
+        const r1 = await fetch(sbUrl + '/rest/v1/konekta_messages?or=(sender_id.eq.' + myId + ',receiver_id.eq.' + myId + ')&order=created_at.desc&limit=50', {
+          headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+        });
+        allMsgs = await r1.json();
+        if (!Array.isArray(allMsgs)) allMsgs = [];
+        // Méthode 2 : par chat_id contenant me.id (si méthode 1 vide)
+        if (allMsgs.length === 0 && myId) {
+          const r2 = await fetch(sbUrl + '/rest/v1/konekta_messages?chat_id=like.*' + myId + '*&order=created_at.desc&limit=50', {
+            headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+          });
+          const msgs2 = await r2.json();
+          if (Array.isArray(msgs2)) allMsgs = msgs2;
+        }
+      } catch(e2) {}
       // Grouper par chat_id, garder le dernier message
       const chats = {};
       (allMsgs || []).forEach(m => { if (!chats[m.chat_id]) chats[m.chat_id] = m; });
