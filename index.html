@@ -1596,6 +1596,9 @@ function endCall() {
 // --- Répondre à un appel entrant ---
 async function answerCall(callId) {
   stopRingtone();
+  if (_incomingCallCheckTimer) { clearInterval(_incomingCallCheckTimer); _incomingCallCheckTimer = null; }
+  const incomingDiv = document.getElementById('incoming-call');
+  if (incomingDiv) { incomingDiv.style.display = 'none'; incomingDiv.dataset.callId = ''; }
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
   try {
     // Récupérer l'offre
@@ -1689,8 +1692,9 @@ async function answerCall(callId) {
 
 function rejectCall(callId) {
   stopRingtone();
+  if (_incomingCallCheckTimer) { clearInterval(_incomingCallCheckTimer); _incomingCallCheckTimer = null; }
   const incomingDiv = document.getElementById('incoming-call');
-  if (incomingDiv) incomingDiv.style.display = 'none';
+  if (incomingDiv) { incomingDiv.style.display = 'none'; incomingDiv.dataset.callId = ''; }
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
   fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
     method: 'PATCH',
@@ -1720,9 +1724,12 @@ function startIncomingCallPoll() {
   }, 2000);
 }
 
+let _incomingCallCheckTimer = null;
+
 function showIncomingCall(call) {
-  // Ne pas montrer si déjà en appel
+  // Ne pas montrer si déjà en appel ou déjà affiché pour cet appel
   if (_currentCallId) return;
+  if (document.getElementById('incoming-call')?.dataset.callId === call.id) return;
   playRingtone('incoming');
   let inDiv = document.getElementById('incoming-call');
   if (!inDiv) {
@@ -1731,6 +1738,7 @@ function showIncomingCall(call) {
     inDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:linear-gradient(135deg,#0a2e1a,#11502c);padding:20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 30px rgba(0,0,0,0.5);animation:slideDown 0.3s ease';
     document.body.appendChild(inDiv);
   }
+  inDiv.dataset.callId = call.id;
   const icon = call.call_type === 'video' ? '📹' : '📞';
   inDiv.innerHTML = `
     <div style="width:50px;height:50px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:#fff;font-weight:700;animation:pulse 1s infinite">${(call.caller_name||'?').charAt(0).toUpperCase()}</div>
@@ -1742,9 +1750,31 @@ function showIncomingCall(call) {
     <button onclick="rejectCall('${call.id}')" style="width:50px;height:50px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.3rem;cursor:pointer">✕</button>
   `;
   inDiv.style.display = 'flex';
+  // Poll pour détecter si l'appelant a raccroché
+  if (_incomingCallCheckTimer) clearInterval(_incomingCallCheckTimer);
+  _incomingCallCheckTimer = setInterval(async () => {
+    try {
+      const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+      const r = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + call.id + '&select=status', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const rows = await r.json();
+      if (rows && rows.length > 0 && (rows[0].status === 'ended' || rows[0].status === 'rejected')) {
+        clearInterval(_incomingCallCheckTimer); _incomingCallCheckTimer = null;
+        stopRingtone();
+        inDiv.style.display = 'none';
+        inDiv.dataset.callId = '';
+      }
+    } catch(e) {}
+  }, 1500);
   // Auto-hide après 30s
   setTimeout(() => {
-    if (inDiv.style.display === 'flex') { stopRingtone(); inDiv.style.display = 'none'; }
+    if (inDiv.style.display === 'flex' && inDiv.dataset.callId === call.id) {
+      stopRingtone();
+      inDiv.style.display = 'none';
+      inDiv.dataset.callId = '';
+      if (_incomingCallCheckTimer) { clearInterval(_incomingCallCheckTimer); _incomingCallCheckTimer = null; }
+    }
   }, 30000);
 }
 
