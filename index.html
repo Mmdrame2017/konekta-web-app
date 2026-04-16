@@ -1593,9 +1593,12 @@ async function startChat() {
     if (!data || !data.id) btn.textContent = 'Rechercher';
   } else {
     // Open chat
-    closeModal('modal-new-chat');
-    openChat({ userId: foundContact.id, name: foundContact.name || foundContact.phone, phone: foundContact.phone });
+    const fc = foundContact;
     foundContact = null;
+    closeModal('modal-new-chat');
+    setTimeout(() => {
+      openChat({ userId: fc.id, name: fc.name || fc.phone, phone: fc.phone });
+    }, 300);
   }
 }
 
