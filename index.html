@@ -1480,10 +1480,41 @@ async function startCall(type) {
   document.getElementById('call-timer').textContent = '';
   _callSeconds = 0;
 
-  playRingtone('outgoing');
+  // Utiliser Jitsi Meet pour les appels (fiable 100%)
+  const jitsiRoomId = 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30);
+  const jitsiUrl = 'https://meet.jit.si/' + jitsiRoomId + '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (type === 'audio' ? 'true' : 'false') + '&config.prejoinPageEnabled=false&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.SHOW_WATERMARK_FOR_GUESTS=false';
 
+  // Enregistrer l'appel dans Supabase pour notifier l'appelé
   try {
-    // 1. Obtenir le flux local
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    await fetch(sbUrl + '/rest/v1/konekta_calls', {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        caller_id: me.id, callee_id: currentChat.userId,
+        caller_name: me.name || me.phone || 'Appelant',
+        call_type: type, status: 'ringing',
+        offer: { jitsiRoom: jitsiRoomId, jitsiUrl: jitsiUrl }
+      })
+    });
+  } catch(e) {}
+
+  // Ouvrir Jitsi dans l'overlay
+  const overlay = document.getElementById('call-overlay');
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div style="position:absolute;top:12px;left:12px;z-index:3;display:flex;align-items:center;gap:10px">
+      <button onclick="endJitsiCall()" style="width:48px;height:48px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 15px rgba(231,76,60,0.4)">✕</button>
+      <span style="color:#fff;font-size:13px;font-weight:600;background:rgba(0,0,0,0.4);padding:4px 10px;border-radius:8px">${currentChat.name || 'Appel'}</span>
+    </div>
+    <iframe src="${jitsiUrl}" allow="camera;microphone;display-capture;autoplay;clipboard-write" style="position:absolute;inset:0;width:100%;height:100%;border:none;border-radius:0"></iframe>
+  `;
+  playRingtone('outgoing');
+  setTimeout(stopRingtone, 5000);
+  return;
+
+  // --- Code WebRTC natif gardé pour plus tard ---
+  try {
     _localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: type === 'video'
@@ -1676,9 +1707,38 @@ async function answerCall(callId) {
   const incomingDiv = document.getElementById('incoming-call');
   if (incomingDiv) { incomingDiv.style.display = 'none'; incomingDiv.dataset.callId = ''; }
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  _currentCallId = callId;
   try {
-    // Récupérer l'offre
+    // Récupérer l'appel
     const r = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId + '&select=*', {
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+    });
+    const rows = await r.json();
+    if (!rows || !rows.length) return;
+    const call = rows[0];
+
+    // Si c'est un appel Jitsi, ouvrir l'iframe
+    if (call.offer && call.offer.jitsiUrl) {
+      const overlay = document.getElementById('call-overlay');
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div style="position:absolute;top:12px;left:12px;z-index:3;display:flex;align-items:center;gap:10px">
+          <button onclick="endJitsiCall()" style="width:48px;height:48px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 15px rgba(231,76,60,0.4)">✕</button>
+          <span style="color:#fff;font-size:13px;font-weight:600;background:rgba(0,0,0,0.4);padding:4px 10px;border-radius:8px">${call.caller_name || 'Appel'}</span>
+        </div>
+        <iframe src="${call.offer.jitsiUrl}" allow="camera;microphone;display-capture;autoplay;clipboard-write" style="position:absolute;inset:0;width:100%;height:100%;border:none"></iframe>
+      `;
+      // Marquer comme answered
+      await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
+        method: 'PATCH',
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'answered' })
+      });
+      return;
+    }
+
+    // --- Ancien code WebRTC natif ci-dessous ---
+    const r2 = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId + '&select=*', {
       headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
     });
     const rows = await r.json();
@@ -1897,6 +1957,23 @@ function showIncomingCall(call) {
       if (_incomingCallCheckTimer) { clearInterval(_incomingCallCheckTimer); _incomingCallCheckTimer = null; }
     }
   }, 30000);
+}
+
+function endJitsiCall() {
+  stopRingtone();
+  const overlay = document.getElementById('call-overlay');
+  overlay.innerHTML = '';
+  overlay.style.display = 'none';
+  // Mettre à jour le statut dans Supabase
+  if (_currentCallId) {
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + _currentCallId, {
+      method: 'PATCH',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'ended', ended_at: new Date().toISOString() })
+    }).catch(() => {});
+    _currentCallId = null;
+  }
 }
 
 function toggleMute() {
