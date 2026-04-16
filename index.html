@@ -2222,15 +2222,24 @@ async function loadWallet() {
 // ════════════════════════════════════════════════════════════
 //  TABS
 // ════════════════════════════════════════════════════════════
+let _marketRefreshTimer = null;
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
   const titles = { chat:'Messages', marketplace:'Marketplace', wallet:'Wallet', profile:'Profil' };
   document.getElementById('topbar-title').textContent = titles[name] || 'Konekta';
   if (name === 'wallet') loadWallet();
-  if (name === 'marketplace') loadProducts();
+  if (name === 'marketplace') { loadProducts(); startMarketRefresh(); }
+  else stopMarketRefresh();
   if (name === 'profile') { loadSolde(); startSoldePolling(); }
   else stopSoldePolling();
+}
+function startMarketRefresh() {
+  stopMarketRefresh();
+  _marketRefreshTimer = setInterval(loadProducts, 15000);
+}
+function stopMarketRefresh() {
+  if (_marketRefreshTimer) { clearInterval(_marketRefreshTimer); _marketRefreshTimer = null; }
 }
 
 // ════════════════════════════════════════════════════════════
