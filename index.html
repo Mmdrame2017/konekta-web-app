@@ -1345,8 +1345,6 @@ async function loadChats() {
       const txt = await r.text();
       try { allMsgs = JSON.parse(txt); } catch(e) { allMsgs = []; }
       if (!Array.isArray(allMsgs)) allMsgs = [];
-      // DEBUG temporaire
-      alert('loadChats: myId=' + myId.slice(0,8) + ' | msgs=' + allMsgs.length + ' | status=' + r.status);
     } else {
       alert('loadChats: myId est VIDE');
     }
@@ -1361,12 +1359,13 @@ async function loadChats() {
     allMsgs.forEach(m => { if (m.chat_id && !chats[m.chat_id]) chats[m.chat_id] = m; });
     let data = Object.values(chats);
     const el = document.getElementById('chat-items');
+    if (!el) { alert('chat-items element NOT FOUND'); return; }
     if (!data || !data.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">💬</div><p>Aucune conversation</p><p style="font-size:12px;margin-top:4px">Cherchez un contact pour démarrer</p></div>';
       return;
     }
     // Récupérer les noms des contacts
-    const otherIds = [...new Set(data.map(c => c.sender_id === me.id ? c.receiver_id : c.sender_id))];
+    const otherIds = [...new Set(data.map(c => c.sender_id === me.id ? c.receiver_id : c.sender_id))].filter(id => id && id !== 'undefined' && id !== 'null');
     let usersMap = {};
     if (otherIds.length > 0) {
       try {
@@ -1391,7 +1390,8 @@ async function loadChats() {
         </div>
       </div>`;
     }).join('');
-  } catch(e) {}
+    alert('Rendu OK: ' + data.length + ' chats');
+  } catch(e) { alert('loadChats ERREUR: ' + e.message); }
 }
 
 // ════════════════════════════════════════════════════════════
