@@ -1503,18 +1503,29 @@ async function startCall(type) {
 
     // Recevoir les pistes distantes
     _peerConnection.ontrack = (event) => {
-      event.streams[0].getTracks().forEach(track => _remoteStream.addTrack(track));
-      // Jouer l'audio distant
+      event.streams[0].getTracks().forEach(track => {
+        _remoteStream.addTrack(track);
+        if (track.kind === 'audio') {
+          const audioEl = document.getElementById('remote-audio');
+          if (audioEl) audioEl.srcObject = new MediaStream([track]);
+        }
+        if (track.kind === 'video') {
+          const videoEl = document.getElementById('remote-video');
+          if (videoEl) {
+            videoEl.srcObject = new MediaStream([track]);
+            videoEl.style.display = 'block';
+            videoEl.play().catch(()=>{});
+            const infoLayer = document.getElementById('call-info-layer');
+            if (infoLayer) { infoLayer.style.background = 'rgba(0,0,0,0.4)'; infoLayer.style.borderRadius = '16px'; infoLayer.style.padding = '16px'; }
+            // Masquer l'avatar quand la vidéo distante est active
+            const avatar = document.getElementById('call-avatar');
+            if (avatar) avatar.style.display = 'none';
+          }
+        }
+      });
+      // Fallback : assigner le stream complet à l'audio
       const audioEl = document.getElementById('remote-audio');
-      const videoEl = document.getElementById('remote-video');
-      if (audioEl) audioEl.srcObject = _remoteStream;
-      if (videoEl && _remoteStream.getVideoTracks().length > 0) {
-        videoEl.srcObject = _remoteStream;
-        videoEl.style.display = 'block';
-        document.getElementById('call-info-layer').style.background = 'rgba(0,0,0,0.4)';
-        document.getElementById('call-info-layer').style.borderRadius = '16px';
-        document.getElementById('call-info-layer').style.padding = '16px';
-      }
+      if (audioEl && !audioEl.srcObject) audioEl.srcObject = _remoteStream;
     };
 
     // 3. Créer l'offre SDP
@@ -1680,16 +1691,30 @@ async function answerCall(callId) {
     _localStream.getTracks().forEach(track => _peerConnection.addTrack(track, _localStream));
     _peerConnection.ontrack = (event) => {
       event.streams[0].getTracks().forEach(track => _remoteStream.addTrack(track));
+      // Assigner chaque piste au bon élément
+      event.streams[0].getTracks().forEach(track => {
+        _remoteStream.addTrack(track);
+        if (track.kind === 'audio') {
+          const audioEl = document.getElementById('remote-audio');
+          if (audioEl) audioEl.srcObject = new MediaStream([track]);
+        }
+        if (track.kind === 'video') {
+          const videoEl = document.getElementById('remote-video');
+          if (videoEl) {
+            videoEl.srcObject = new MediaStream([track]);
+            videoEl.style.display = 'block';
+            videoEl.play().catch(()=>{});
+            const infoLayer = document.getElementById('call-info-layer');
+            if (infoLayer) { infoLayer.style.background = 'rgba(0,0,0,0.4)'; infoLayer.style.borderRadius = '16px'; infoLayer.style.padding = '16px'; }
+            // Masquer l'avatar quand la vidéo distante est active
+            const avatar = document.getElementById('call-avatar');
+            if (avatar) avatar.style.display = 'none';
+          }
+        }
+      });
+      // Fallback : assigner le stream complet à l'audio
       const audioEl = document.getElementById('remote-audio');
-      const videoEl = document.getElementById('remote-video');
-      if (audioEl) audioEl.srcObject = _remoteStream;
-      if (videoEl && _remoteStream.getVideoTracks().length > 0) {
-        videoEl.srcObject = _remoteStream;
-        videoEl.style.display = 'block';
-        document.getElementById('call-info-layer').style.background = 'rgba(0,0,0,0.4)';
-        document.getElementById('call-info-layer').style.borderRadius = '16px';
-        document.getElementById('call-info-layer').style.padding = '16px';
-      }
+      if (audioEl && !audioEl.srcObject) audioEl.srcObject = _remoteStream;
     };
 
     // Appliquer l'offre
