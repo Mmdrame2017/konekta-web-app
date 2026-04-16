@@ -1307,19 +1307,48 @@ function getChatId(a, b) {
 
 async function loadChats() {
   try {
-    const data = await apiFetch('/messages/chats/list');
+    let data;
+    try { data = await apiFetch('/messages/chats/list'); }
+    catch(apiErr) {
+      // Fallback Supabase : derniers messages groupés par chat_id
+      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      const r = await fetch(sbUrl + '/rest/v1/konekta_messages?or=(sender_id.eq.' + me.id + ',receiver_id.eq.' + me.id + ')&order=created_at.desc&limit=50', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const allMsgs = await r.json();
+      // Grouper par chat_id, garder le dernier message
+      const chats = {};
+      (allMsgs || []).forEach(m => { if (!chats[m.chat_id]) chats[m.chat_id] = m; });
+      data = Object.values(chats);
+    }
     const el = document.getElementById('chat-items');
     if (!data || !data.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">💬</div><p>Aucune conversation</p><p style="font-size:12px;margin-top:4px">Cherchez un contact pour démarrer</p></div>';
       return;
     }
+    // Récupérer les noms des contacts
+    const otherIds = [...new Set(data.map(c => c.sender_id === me.id ? c.receiver_id : c.sender_id))];
+    let usersMap = {};
+    if (otherIds.length > 0) {
+      try {
+        const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+        const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+        const idsFilter = otherIds.map(id => 'id.eq.' + id).join(',');
+        const ur = await fetch(sbUrl + '/rest/v1/konekta_users?or=(' + idsFilter + ')&select=id,name,phone', { headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey } });
+        const users = await ur.json();
+        if (Array.isArray(users)) users.forEach(u => { usersMap[u.id] = u; });
+      } catch(e) {}
+    }
     el.innerHTML = data.map(chat => {
       const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
+      const other = usersMap[otherId] || {};
+      const otherName = other.name || other.phone || otherId.slice(0,12);
       const preview = chat.type === 'payment' ? '💳 Paiement Wave' : (chat.content || '...');
-      return `<div class="chat-item" onclick="openChatById('${otherId}')" data-other="${otherId}">
-        <div class="chat-avatar">${(otherId||'?').charAt(0).toUpperCase()}</div>
+      return `<div class="chat-item" onclick="openChat({userId:'${otherId}',name:'${(otherName||'').replace(/'/g,'')}',phone:'${other.phone||''}'})" data-other="${otherId}">
+        <div class="chat-avatar">${(otherName||'?').charAt(0).toUpperCase()}</div>
         <div class="chat-item-info">
-          <div class="chat-item-name">${otherId.slice(0,8)}...</div>
+          <div class="chat-item-name">${otherName}</div>
           <div class="chat-item-last">${preview.substring(0,40)}</div>
         </div>
       </div>`;
@@ -1642,18 +1671,29 @@ function openChat(contact) {
 
 async function loadMessages(contact) {
   const chatId = getChatId(me.id, contact.userId);
+  const area = document.getElementById('messages-area');
+  if (!area) return;
+  let data = null;
   try {
-    const data = await apiFetch(`/messages/${chatId}`);
-    const area = document.getElementById('messages-area');
-    if (!area) return;
-    if (!data || !data.length) {
-      area.innerHTML = '<div style="text-align:center;color:var(--text2);padding:40px;font-size:13px">Commencez la conversation 👋</div>';
-      return;
-    }
-    area.innerHTML = '';
-    data.forEach(msg => appendMessage(msg, true));
-    area.scrollTop = area.scrollHeight;
-  } catch(e) {}
+    data = await apiFetch(`/messages/${chatId}`);
+  } catch(apiErr) {
+    // Fallback Supabase
+    try {
+      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      const r = await fetch(sbUrl + '/rest/v1/konekta_messages?chat_id=eq.' + encodeURIComponent(chatId) + '&order=created_at.asc&limit=100', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      data = await r.json();
+    } catch(e2) { data = []; }
+  }
+  if (!data || !data.length) {
+    area.innerHTML = '<div data-placeholder style="text-align:center;color:var(--text2);padding:40px;font-size:13px">Commencez la conversation 👋</div>';
+    return;
+  }
+  area.innerHTML = '';
+  data.forEach(msg => appendMessage(msg, true));
+  area.scrollTop = area.scrollHeight;
 }
 
 function appendMessage(msg, isHistory=false) {
@@ -1709,8 +1749,19 @@ async function sendMessage() {
   try {
     await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type: 'text', content });
     if (socket) socket.emit('sendMessage', { ...msg, receiverId: currentChat.userId });
-    loadChats();
-  } catch(e) {}
+  } catch(apiErr) {
+    // Fallback Supabase
+    try {
+      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      await fetch(sbUrl + '/rest/v1/konekta_messages', {
+        method: 'POST',
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'text', content })
+      });
+    } catch(e2) {}
+  }
+  loadChats();
 }
 
 function handleInputKey(e) {
