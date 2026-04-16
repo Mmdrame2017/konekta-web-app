@@ -1529,20 +1529,39 @@ async function startChat() {
   const btn = document.getElementById('start-chat-btn');
   if (!foundContact) {
     // Search phase
+    if (!phone) { showMsg('new-chat-msg', 'Entrez un numéro', 'error'); return; }
     btn.disabled = true; btn.innerHTML = '<span class="loading"></span>';
+    let data = null;
     try {
-      const data = await apiFetch(`/users/search?phone=${encodeURIComponent(phone)}`);
-      if (data && data.id) {
-        foundContact = data;
-        document.getElementById('new-chat-found').style.display = 'block';
-        document.getElementById('new-chat-found-name').textContent = data.name || data.phone;
-        btn.textContent = '💬 Démarrer la conversation';
-        document.getElementById('new-chat-msg').textContent = '';
-      } else {
-        showMsg('new-chat-msg', 'Utilisateur non trouvé', 'error');
-      }
-    } catch(e) { showMsg('new-chat-msg', 'Utilisateur non trouvé', 'error'); }
+      data = await apiFetch(`/users/search?phone=${encodeURIComponent(phone)}`);
+    } catch(apiErr) {
+      // Fallback Supabase : chercher dans konekta_users
+      try {
+        const digits = phone.replace(/\D/g, '');
+        const without221 = digits.startsWith('221') ? digits.slice(3) : digits;
+        const variants = [phone, digits, '+' + digits, without221, '221' + without221, '+221' + without221];
+        const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+        const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+        for (const ph of variants) {
+          const r = await fetch(sbUrl + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=id,name,phone&limit=1', {
+            headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+          });
+          const rows = await r.json();
+          if (Array.isArray(rows) && rows.length > 0) { data = rows[0]; break; }
+        }
+      } catch(e2) {}
+    }
+    if (data && data.id) {
+      foundContact = data;
+      document.getElementById('new-chat-found').style.display = 'block';
+      document.getElementById('new-chat-found-name').textContent = data.name || data.phone;
+      btn.textContent = '💬 Démarrer la conversation';
+      document.getElementById('new-chat-msg').textContent = '';
+    } else {
+      showMsg('new-chat-msg', 'Utilisateur non trouvé', 'error');
+    }
     btn.disabled = false;
+    if (!data || !data.id) btn.textContent = 'Rechercher';
   } else {
     // Open chat
     closeModal('modal-new-chat');
