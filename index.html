@@ -1536,14 +1536,19 @@ async function startCall(type) {
     const offer = await _peerConnection.createOffer();
     await _peerConnection.setLocalDescription(offer);
 
-    // 4. Collecter les ICE candidates
+    // 4. Collecter les ICE candidates et attendre icegatheringstatechange
     const iceCandidates = [];
     _peerConnection.onicecandidate = (event) => {
       if (event.candidate) iceCandidates.push(event.candidate.toJSON());
     };
 
-    // Attendre que les ICE candidates soient collectées (4s pour TURN)
-    await new Promise(r => setTimeout(r, 4000));
+    // Attendre que le gathering soit terminé ou timeout 6s
+    await new Promise(resolve => {
+      const timeout = setTimeout(resolve, 6000);
+      _peerConnection.onicegatheringstatechange = () => {
+        if (_peerConnection.iceGatheringState === 'complete') { clearTimeout(timeout); resolve(); }
+      };
+    });
 
     // 5. Enregistrer l'appel dans Supabase
     const sbUrl = SUPA_FB_URL;
@@ -1582,11 +1587,29 @@ async function startCall(type) {
           clearInterval(_callSignalPoll); _callSignalPoll = null;
           await _peerConnection.setRemoteDescription(new RTCSessionDescription(call.answer));
           // Ajouter les ICE candidates du callee
+          let _addedIce = 0;
           if (call.ice_callee && Array.isArray(call.ice_callee)) {
             for (const c of call.ice_callee) {
-              try { await _peerConnection.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+              try { await _peerConnection.addIceCandidate(new RTCIceCandidate(c)); _addedIce++; } catch(e) {}
             }
           }
+          // Re-poll les ICE callee toutes les 2s (trickle ICE)
+          let _icePollCount = 0;
+          const _icePoll = setInterval(async () => {
+            _icePollCount++;
+            if (_icePollCount > 10 || !_peerConnection) { clearInterval(_icePoll); return; }
+            try {
+              const sbUrl2 = SUPA_FB_URL; const sbKey2 = SUPA_FB_KEY;
+              const r2 = await fetch(sbUrl2 + '/rest/v1/konekta_calls?id=eq.' + _currentCallId + '&select=ice_callee', { headers: { apikey: sbKey2, Authorization: 'Bearer ' + sbKey2 } });
+              const rows2 = await r2.json();
+              if (rows2 && rows2[0] && Array.isArray(rows2[0].ice_callee) && rows2[0].ice_callee.length > _addedIce) {
+                for (let i = _addedIce; i < rows2[0].ice_callee.length; i++) {
+                  try { await _peerConnection.addIceCandidate(new RTCIceCandidate(rows2[0].ice_callee[i])); } catch(e) {}
+                }
+                _addedIce = rows2[0].ice_callee.length;
+              }
+            } catch(e) {}
+          }, 2000);
           document.getElementById('call-status').textContent = type === 'video' ? '📹 Vidéo connectée' : '🔊 Connecté';
           _callTimer = setInterval(() => {
             _callSeconds++;
@@ -1739,7 +1762,12 @@ async function answerCall(callId) {
     _peerConnection.onicecandidate = (event) => {
       if (event.candidate) iceCandidates.push(event.candidate.toJSON());
     };
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(resolve => {
+      const timeout = setTimeout(resolve, 6000);
+      _peerConnection.onicegatheringstatechange = () => {
+        if (_peerConnection.iceGatheringState === 'complete') { clearTimeout(timeout); resolve(); }
+      };
+    });
 
     // Envoyer la réponse
     await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
@@ -1747,6 +1775,18 @@ async function answerCall(callId) {
       headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({ status: 'answered', answer: _peerConnection.localDescription.toJSON(), ice_callee: iceCandidates })
     });
+
+    // Continuer à envoyer les ICE candidates qui arrivent après
+    _peerConnection.onicecandidate = (event) => {
+      if (event.candidate) {
+        iceCandidates.push(event.candidate.toJSON());
+        fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
+          method: 'PATCH',
+          headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ ice_callee: iceCandidates })
+        }).catch(() => {});
+      }
+    };
 
     document.getElementById('call-status').textContent = call.call_type === 'video' ? '📹 Vidéo connectée' : '🔊 Connecté';
     _callTimer = setInterval(() => {
