@@ -1345,8 +1345,6 @@ async function loadChats() {
       const txt = await r.text();
       try { allMsgs = JSON.parse(txt); } catch(e) { allMsgs = []; }
       if (!Array.isArray(allMsgs)) allMsgs = [];
-    } else {
-      alert('loadChats: myId est VIDE');
     }
     // Fallback : chercher par chat_id
     if (allMsgs.length === 0 && myId) {
@@ -1359,7 +1357,7 @@ async function loadChats() {
     allMsgs.forEach(m => { if (m.chat_id && !chats[m.chat_id]) chats[m.chat_id] = m; });
     let data = Object.values(chats);
     const el = document.getElementById('chat-items');
-    if (!el) { alert('chat-items element NOT FOUND'); return; }
+    if (!el) return;
     if (!data || !data.length) {
       el.innerHTML = '<div class="empty-state"><div class="icon">💬</div><p>Aucune conversation</p><p style="font-size:12px;margin-top:4px">Cherchez un contact pour démarrer</p></div>';
       return;
@@ -1377,10 +1375,13 @@ async function loadChats() {
         if (Array.isArray(users)) users.forEach(u => { usersMap[u.id] = u; });
       } catch(e) {}
     }
-    el.innerHTML = data.map(chat => {
+    el.innerHTML = data.filter(chat => {
+      const oid = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
+      return oid && oid !== 'undefined' && oid !== 'null';
+    }).map(chat => {
       const otherId = chat.sender_id === me.id ? chat.receiver_id : chat.sender_id;
       const other = usersMap[otherId] || {};
-      const otherName = other.name || other.phone || otherId.slice(0,12);
+      const otherName = other.name || other.phone || (otherId||'').slice(0,12) || 'Contact';
       const preview = chat.type === 'payment' ? '💳 Paiement Wave' : (chat.content || '...');
       return `<div class="chat-item" onclick="openChat({userId:'${otherId}',name:'${(otherName||'').replace(/'/g,'')}',phone:'${other.phone||''}'})" data-other="${otherId}">
         <div class="chat-avatar">${(otherName||'?').charAt(0).toUpperCase()}</div>
@@ -1390,8 +1391,7 @@ async function loadChats() {
         </div>
       </div>`;
     }).join('');
-    alert('Rendu OK: ' + data.length + ' chats');
-  } catch(e) { alert('loadChats ERREUR: ' + e.message); }
+  } catch(e) { console.error('loadChats:', e.message); }
 }
 
 // ════════════════════════════════════════════════════════════
