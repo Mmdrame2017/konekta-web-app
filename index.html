@@ -1500,34 +1500,7 @@ async function startCall(type) {
     </div>
     <div id="jitsi-container" style="position:absolute;inset:0;width:100%;height:100%"></div>
   `;
-  try {
-    window._jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-      roomName: jitsiRoomId,
-      parentNode: document.getElementById('jitsi-container'),
-      width: '100%',
-      height: '100%',
-      configOverwrite: {
-        startWithAudioMuted: false,
-        startWithVideoMuted: type === 'audio',
-        prejoinPageEnabled: false,
-        disableDeepLinking: true,
-        hideConferenceSubject: true
-      },
-      interfaceConfigOverwrite: {
-        SHOW_JITSI_WATERMARK: false,
-        SHOW_WATERMARK_FOR_GUESTS: false,
-        SHOW_BRAND_WATERMARK: false,
-        TOOLBAR_BUTTONS: ['microphone','camera','hangup','chat','fullscreen','tileview']
-      },
-      userInfo: {
-        displayName: me.name || me.phone || 'Konekta User'
-      }
-    });
-    window._jitsiApi.addEventListener('readyToClose', () => endJitsiCall());
-  } catch(e) {
-    // Fallback iframe simple si l'API échoue
-    document.getElementById('jitsi-container').innerHTML = '<iframe src="' + jitsiUrl + '" allow="camera;microphone;display-capture;autoplay;clipboard-write" style="width:100%;height:100%;border:none"></iframe>';
-  }
+  openJitsiRoom(jitsiRoomId, type);
   playRingtone('outgoing');
   setTimeout(stopRingtone, 5000);
   return;
@@ -1746,19 +1719,7 @@ async function answerCall(callId) {
         </div>
         <div id="jitsi-container" style="position:absolute;inset:0;width:100%;height:100%"></div>
       `;
-      try {
-        window._jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-          roomName: call.offer.jitsiRoom,
-          parentNode: document.getElementById('jitsi-container'),
-          width: '100%', height: '100%',
-          configOverwrite: { startWithAudioMuted: false, startWithVideoMuted: call.call_type === 'audio', prejoinPageEnabled: false, disableDeepLinking: true, hideConferenceSubject: true },
-          interfaceConfigOverwrite: { SHOW_JITSI_WATERMARK: false, SHOW_WATERMARK_FOR_GUESTS: false, SHOW_BRAND_WATERMARK: false, TOOLBAR_BUTTONS: ['microphone','camera','hangup','chat','fullscreen','tileview'] },
-          userInfo: { displayName: me.name || me.phone || 'Konekta User' }
-        });
-        window._jitsiApi.addEventListener('readyToClose', () => endJitsiCall());
-      } catch(e) {
-        document.getElementById('jitsi-container').innerHTML = '<iframe src="' + (call.offer.jitsiUrl || '') + '" allow="camera;microphone;display-capture;autoplay;clipboard-write" style="width:100%;height:100%;border:none"></iframe>';
-      }
+      openJitsiRoom(call.offer.jitsiRoom, call.call_type);
       // Marquer comme answered
       await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
         method: 'PATCH',
@@ -1856,6 +1817,44 @@ function showIncomingCall(call) {
       if (_incomingCallCheckTimer) { clearInterval(_incomingCallCheckTimer); _incomingCallCheckTimer = null; }
     }
   }, 30000);
+}
+
+function openJitsiRoom(roomId, callType) {
+  const container = document.getElementById('jitsi-container');
+  if (!container) return;
+  try {
+    window._jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
+      roomName: roomId,
+      parentNode: container,
+      width: '100%',
+      height: '100%',
+      configOverwrite: {
+        startWithAudioMuted: false,
+        startWithVideoMuted: callType === 'audio',
+        prejoinConfig: { enabled: false },
+        prejoinPageEnabled: false,
+        disableDeepLinking: true,
+        hideConferenceSubject: true,
+        startAudioOnly: callType === 'audio',
+        enableClosePage: false
+      },
+      interfaceConfigOverwrite: {
+        SHOW_JITSI_WATERMARK: false,
+        SHOW_WATERMARK_FOR_GUESTS: false,
+        SHOW_BRAND_WATERMARK: false,
+        DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
+        MOBILE_APP_PROMO: false,
+        TOOLBAR_BUTTONS: ['microphone','camera','hangup','fullscreen','tileview','select-background']
+      },
+      userInfo: { displayName: me.name || me.phone || 'Konekta User' }
+    });
+    window._jitsiApi.addEventListener('readyToClose', () => endJitsiCall());
+    window._jitsiApi.addEventListener('videoConferenceLeft', () => endJitsiCall());
+  } catch(e) {
+    // Fallback iframe brut
+    const url = 'https://meet.jit.si/' + roomId + '#config.prejoinConfig.enabled=false&config.startWithVideoMuted=' + (callType === 'audio') + '&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
+    container.innerHTML = '<iframe src="' + url + '" allow="camera;microphone;display-capture;autoplay;clipboard-write" style="width:100%;height:100%;border:none"></iframe>';
+  }
 }
 
 function endJitsiCall() {
