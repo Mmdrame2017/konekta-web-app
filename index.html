@@ -993,14 +993,24 @@ async function verifyOtp() {
     if (code !== _otpCode) { showMsg('otp-msg', 'Code incorrect', 'error'); btn.disabled=false; btn.innerHTML='Vérifier'; return; }
     const digits = phone.replace(/\D/g, '');
     const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json' };
-    // Chercher l'utilisateur
+    // Chercher l'utilisateur par les 9 derniers chiffres (numéro sans indicatif)
     let users = [];
     const without221 = digits.startsWith('221') ? digits.slice(3) : digits;
-    const variants = [phone, digits, '+' + digits, without221, '221' + without221, '+221' + without221];
-    for (const ph of variants) {
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=*&limit=1', { headers: h });
+    const last9 = without221.slice(-9);
+    // Chercher avec ilike sur les 9 derniers chiffres
+    try {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=like.*' + last9 + '&select=*&limit=1', { headers: h });
       const rows = await r.json();
-      if (Array.isArray(rows) && rows.length > 0) { users = rows; break; }
+      if (Array.isArray(rows) && rows.length > 0) users = rows;
+    } catch(e3) {}
+    // Fallback : chercher exact
+    if (users.length === 0) {
+      const variants = [phone, digits, '+' + digits, without221, '221' + without221, '+221' + without221, last9];
+      for (const ph of variants) {
+        const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=*&limit=1', { headers: h });
+        const rows = await r.json();
+        if (Array.isArray(rows) && rows.length > 0) { users = rows; break; }
+      }
     }
     if (users.length > 0) {
       me = users[0];
