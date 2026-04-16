@@ -1646,7 +1646,7 @@ function openChat(contact) {
   });
 
   const view = document.getElementById('chat-view');
-  if (!view) { alert('Erreur: chat-view introuvable'); return; }
+  if (!view) return;
   // Mobile : masquer la liste, afficher le chat
   const isMobile = window.innerWidth <= 768;
   if (isMobile) {
@@ -1681,7 +1681,7 @@ function openChat(contact) {
     <input type="file" id="file-attach-input" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" onchange="onFileAttached(this)">
   `;
   loadMessages(contact);
-  } catch(err) { alert('Erreur openChat: ' + err.message); }
+  } catch(err) { console.error('openChat:', err.message); }
 }
 
 async function loadMessages(contact) {
