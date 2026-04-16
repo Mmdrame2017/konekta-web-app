@@ -728,6 +728,7 @@
     <button onclick="toggleSpeaker()" id="call-speaker-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer" title="Haut-parleur">🔊</button>
     <button onclick="endCall()" style="width:64px;height:64px;border-radius:50%;border:none;background:#E74C3C;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.4)" title="Raccrocher">📞</button>
     <button onclick="toggleVideo()" id="call-video-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer;display:none" title="Caméra">📹</button>
+    <button onclick="switchCamera()" id="call-switch-cam" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer;display:none" title="Changer caméra">🔄</button>
   </div>
 </div>
 
@@ -1474,6 +1475,7 @@ async function startCall(type) {
   document.getElementById('call-name').textContent = currentChat.name || currentChat.phone || 'Contact';
   document.getElementById('call-status').textContent = 'Appel en cours...';
   document.getElementById('call-video-btn').style.display = type === 'video' ? 'block' : 'none';
+  document.getElementById('call-switch-cam').style.display = type === 'video' ? 'block' : 'none';
   document.getElementById('call-timer').textContent = '';
   _callSeconds = 0;
 
@@ -1657,6 +1659,7 @@ async function answerCall(callId) {
     document.getElementById('call-name').textContent = call.caller_name || 'Appelant';
     document.getElementById('call-status').textContent = 'Connexion...';
     document.getElementById('call-video-btn').style.display = call.call_type === 'video' ? 'block' : 'none';
+    document.getElementById('call-switch-cam').style.display = call.call_type === 'video' ? 'block' : 'none';
     document.getElementById('call-timer').textContent = '';
     _callSeconds = 0;
 
@@ -1846,8 +1849,32 @@ function toggleVideo() {
   if (_localStream) {
     const videoTracks = _localStream.getVideoTracks();
     videoTracks.forEach(t => { t.enabled = !t.enabled; });
+    const localVid = document.getElementById('local-video');
+    if (localVid) localVid.style.display = videoTracks[0]?.enabled ? 'block' : 'none';
     document.getElementById('call-video-btn').style.background = videoTracks[0]?.enabled ? 'var(--primary)' : 'rgba(255,255,255,0.12)';
   }
+}
+
+let _facingMode = 'user';
+async function switchCamera() {
+  if (!_localStream || !_peerConnection) return;
+  _facingMode = _facingMode === 'user' ? 'environment' : 'user';
+  try {
+    // Arrêter l'ancienne vidéo
+    _localStream.getVideoTracks().forEach(t => t.stop());
+    // Nouvelle vidéo avec la caméra opposée
+    const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: _facingMode }, audio: false });
+    const newTrack = newStream.getVideoTracks()[0];
+    // Remplacer la piste dans le PeerConnection
+    const sender = _peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+    if (sender) await sender.replaceTrack(newTrack);
+    // Remplacer dans le stream local
+    _localStream.removeTrack(_localStream.getVideoTracks()[0]);
+    _localStream.addTrack(newTrack);
+    // Mettre à jour la vidéo locale
+    const localVid = document.getElementById('local-video');
+    if (localVid) localVid.srcObject = _localStream;
+  } catch(e) { console.error('switchCamera:', e.message); }
 }
 
 // ════════════════════════════════════════════════════════════
