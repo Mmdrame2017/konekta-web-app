@@ -1122,17 +1122,28 @@ function initSocket() {
 // ════════════════════════════════════════════════════════════
 async function loadProfile() {
   try {
-    const data = await apiFetch('/users/me');
-    me = { ...me, ...data };
-    localStorage.setItem('knk_user', JSON.stringify(me));
-    const initial = (me.name || me.phone || 'K').charAt(0).toUpperCase();
-    document.getElementById('user-avatar').textContent = initial;
-    document.getElementById('profile-avatar-big').textContent = initial;
-    document.getElementById('profile-name-big').textContent = me.name || '(sans nom)';
-    document.getElementById('profile-phone-big').textContent = me.phone || '—';
-    const waveDisplay = document.getElementById('profile-wave-display');
-    if (waveDisplay) waveDisplay.textContent = me.wave_phone || 'Non configuré';
+    let data;
+    try { data = await apiFetch('/users/me'); }
+    catch(apiErr) {
+      // Fallback : utiliser me depuis le localStorage (déjà chargé au login)
+      data = me;
+    }
+    if (data) {
+      me = { ...me, ...data };
+      localStorage.setItem('knk_user', JSON.stringify(me));
+    }
   } catch(e) {}
+  const initial = (me.name || me.phone || 'K').charAt(0).toUpperCase();
+  const userAv = document.getElementById('user-avatar');
+  const profAv = document.getElementById('profile-avatar-big');
+  const profName = document.getElementById('profile-name-big');
+  const profPhone = document.getElementById('profile-phone-big');
+  const waveDisplay = document.getElementById('profile-wave-display');
+  if (userAv) userAv.textContent = initial;
+  if (profAv) profAv.textContent = initial;
+  if (profName) profName.textContent = me.name || me.phone || '(sans nom)';
+  if (profPhone) profPhone.textContent = me.phone || '—';
+  if (waveDisplay) waveDisplay.textContent = me.wave_phone || 'Non configuré';
   loadSolde();
 }
 
