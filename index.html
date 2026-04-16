@@ -554,6 +554,7 @@
           <div class="profile-avatar" id="profile-avatar-big">K</div>
           <div class="profile-name" id="profile-name-big">Chargement...</div>
           <div class="profile-phone" id="profile-phone-big">—</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:4px;word-break:break-all" id="debug-id"></div>
         </div>
         <!-- Paiement vendeur automatique -->
         <div class="profile-section" id="solde-section" style="margin-bottom:16px">
@@ -1158,6 +1159,8 @@ async function loadProfile() {
   if (profName) profName.textContent = me.name || me.phone || '(sans nom)';
   if (profPhone) profPhone.textContent = me.phone || '—';
   if (waveDisplay) waveDisplay.textContent = me.wave_phone || 'Non configuré';
+  const debugEl = document.getElementById('debug-id');
+  if (debugEl) debugEl.textContent = 'ID: ' + (me.id || 'UNDEFINED') + ' | Phone: ' + (me.phone || 'NONE');
   loadSolde();
 }
 
