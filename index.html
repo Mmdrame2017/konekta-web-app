@@ -728,7 +728,7 @@
   <button onclick="cancelVoiceRecord()" style="background:none;border:none;color:#E74C3C;font-size:18px;cursor:pointer">✕</button>
   <button onclick="sendVoiceRecord()" style="background:var(--primary);border:none;color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer">Envoyer</button>
 </div>
-<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
+<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}} @keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}</style>
 
 <!-- Image Zoom Overlay -->
 <div id="image-zoom-overlay" onclick="closeZoom()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10001;align-items:center;justify-content:center;cursor:zoom-out;padding:20px">
@@ -1057,6 +1057,8 @@ function showApp() {
   loadWallet();
   // Détecter retour paiement Konekta
   handleKonektaPaymentReturn();
+  // Écouter les appels entrants
+  startIncomingCallPoll();
 }
 
 async function handleKonektaPaymentReturn() {
@@ -1382,46 +1384,373 @@ async function loadChats() {
 // ════════════════════════════════════════════════════════════
 //  APPELS VOCAUX / VIDÉO
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+//  APPELS RÉELS WebRTC + Supabase Signaling
+// ════════════════════════════════════════════════════════════
 let _callTimer = null;
 let _callSeconds = 0;
 let _callMuted = false;
 let _callSpeaker = false;
+let _peerConnection = null;
+let _localStream = null;
+let _remoteStream = null;
+let _currentCallId = null;
+let _currentCallType = 'audio';
+let _incomingCallPoll = null;
+let _callSignalPoll = null;
+let _ringtoneAudio = null;
 
-function startCall(type) {
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' }
+];
+
+// Sonnerie générée par Web Audio API
+function playRingtone(type) {
+  stopRingtone();
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.3;
+    gain.connect(ctx.destination);
+    let playing = true;
+    function ring() {
+      if (!playing) return;
+      const osc = ctx.createOscillator();
+      osc.type = type === 'incoming' ? 'sine' : 'sine';
+      osc.frequency.value = type === 'incoming' ? 440 : 480;
+      osc.connect(gain);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+      setTimeout(() => {
+        if (!playing) return;
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = type === 'incoming' ? 523 : 440;
+        osc2.connect(gain);
+        osc2.start();
+        osc2.stop(ctx.currentTime + 0.4);
+      }, 500);
+      setTimeout(() => { if (playing) ring(); }, 2000);
+    }
+    ring();
+    _ringtoneAudio = { stop: () => { playing = false; ctx.close().catch(()=>{}); } };
+  } catch(e) {}
+}
+function stopRingtone() {
+  if (_ringtoneAudio) { _ringtoneAudio.stop(); _ringtoneAudio = null; }
+}
+
+// --- Appel sortant ---
+async function startCall(type) {
   if (!currentChat) return;
+  _currentCallType = type;
   const overlay = document.getElementById('call-overlay');
   overlay.style.display = 'flex';
   document.getElementById('call-avatar').textContent = (currentChat.name || '?').charAt(0).toUpperCase();
   document.getElementById('call-name').textContent = currentChat.name || currentChat.phone || 'Contact';
-  document.getElementById('call-status').textContent = type === 'video' ? 'Appel vidéo en cours...' : 'Appel en cours...';
+  document.getElementById('call-status').textContent = 'Appel en cours...';
   document.getElementById('call-video-btn').style.display = type === 'video' ? 'block' : 'none';
+  document.getElementById('call-timer').textContent = '';
   _callSeconds = 0;
-  document.getElementById('call-timer').textContent = '0:00';
-  // Simuler la connexion après 2s
-  setTimeout(() => {
-    document.getElementById('call-status').textContent = type === 'video' ? '📹 Vidéo connectée' : '🔊 Connecté';
+
+  playRingtone('outgoing');
+
+  try {
+    // 1. Obtenir le flux local
+    _localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: type === 'video'
+    });
+
+    // 2. Créer le PeerConnection
+    _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    _remoteStream = new MediaStream();
+
+    // Ajouter les pistes locales
+    _localStream.getTracks().forEach(track => _peerConnection.addTrack(track, _localStream));
+
+    // Recevoir les pistes distantes
+    _peerConnection.ontrack = (event) => {
+      event.streams[0].getTracks().forEach(track => _remoteStream.addTrack(track));
+      // Jouer l'audio distant
+      let audioEl = document.getElementById('remote-audio');
+      if (!audioEl) { audioEl = document.createElement('audio'); audioEl.id = 'remote-audio'; audioEl.autoplay = true; document.body.appendChild(audioEl); }
+      audioEl.srcObject = _remoteStream;
+    };
+
+    // 3. Créer l'offre SDP
+    const offer = await _peerConnection.createOffer();
+    await _peerConnection.setLocalDescription(offer);
+
+    // 4. Collecter les ICE candidates
+    const iceCandidates = [];
+    _peerConnection.onicecandidate = (event) => {
+      if (event.candidate) iceCandidates.push(event.candidate.toJSON());
+    };
+
+    // Attendre que les ICE candidates soient collectées
+    await new Promise(r => setTimeout(r, 2000));
+
+    // 5. Enregistrer l'appel dans Supabase
+    const sbUrl = SUPA_FB_URL;
+    const sbKey = SUPA_FB_KEY;
+    const callRes = await fetch(sbUrl + '/rest/v1/konekta_calls', {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({
+        caller_id: me.id,
+        callee_id: currentChat.userId,
+        caller_name: me.name || me.phone || 'Appelant',
+        call_type: type,
+        status: 'ringing',
+        offer: _peerConnection.localDescription.toJSON(),
+        ice_caller: iceCandidates
+      })
+    });
+    const callData = await callRes.json();
+    _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+
+    document.getElementById('call-status').textContent = '🔔 Sonnerie...';
+
+    // 6. Polling pour la réponse
+    _callSignalPoll = setInterval(async () => {
+      try {
+        const r = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + _currentCallId + '&select=status,answer,ice_callee', {
+          headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+        });
+        const rows = await r.json();
+        if (!rows || !rows.length) return;
+        const call = rows[0];
+
+        if (call.status === 'answered' && call.answer) {
+          // Connexion !
+          stopRingtone();
+          clearInterval(_callSignalPoll); _callSignalPoll = null;
+          await _peerConnection.setRemoteDescription(new RTCSessionDescription(call.answer));
+          // Ajouter les ICE candidates du callee
+          if (call.ice_callee && Array.isArray(call.ice_callee)) {
+            for (const c of call.ice_callee) {
+              try { await _peerConnection.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+            }
+          }
+          document.getElementById('call-status').textContent = type === 'video' ? '📹 Vidéo connectée' : '🔊 Connecté';
+          _callTimer = setInterval(() => {
+            _callSeconds++;
+            const m = Math.floor(_callSeconds / 60);
+            const s = _callSeconds % 60;
+            document.getElementById('call-timer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+          }, 1000);
+        } else if (call.status === 'rejected' || call.status === 'ended') {
+          stopRingtone();
+          clearInterval(_callSignalPoll); _callSignalPoll = null;
+          document.getElementById('call-status').textContent = call.status === 'rejected' ? '❌ Refusé' : '📵 Terminé';
+          setTimeout(() => endCall(), 1500);
+        }
+      } catch(e) {}
+    }, 1500);
+
+  } catch(e) {
+    stopRingtone();
+    document.getElementById('call-status').textContent = '❌ ' + e.message;
+    setTimeout(() => endCall(), 2000);
+  }
+}
+
+// --- Raccrocher ---
+function endCall() {
+  stopRingtone();
+  clearInterval(_callTimer); _callTimer = null;
+  clearInterval(_callSignalPoll); _callSignalPoll = null;
+  if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
+  if (_peerConnection) { _peerConnection.close(); _peerConnection = null; }
+  const audioEl = document.getElementById('remote-audio');
+  if (audioEl) { audioEl.srcObject = null; audioEl.remove(); }
+  // Mettre à jour le statut dans Supabase
+  if (_currentCallId) {
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + _currentCallId, {
+      method: 'PATCH',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'ended', ended_at: new Date().toISOString() })
+    }).catch(() => {});
+    _currentCallId = null;
+  }
+  document.getElementById('call-overlay').style.display = 'none';
+  if (_callSeconds > 0) {
+    const duration = Math.floor(_callSeconds / 60) + ':' + (_callSeconds % 60 < 10 ? '0' : '') + (_callSeconds % 60);
+    // Enregistrer l'appel dans le chat
+    if (currentChat) {
+      const chatId = getChatId(me.id, currentChat.userId);
+      const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+      fetch(sbUrl + '/rest/v1/konekta_messages', {
+        method: 'POST',
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'text', content: '📞 Appel ' + (_currentCallType === 'video' ? 'vidéo' : 'vocal') + ' (' + duration + ')' })
+      }).catch(() => {});
+    }
+  }
+}
+
+// --- Répondre à un appel entrant ---
+async function answerCall(callId) {
+  stopRingtone();
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  try {
+    // Récupérer l'offre
+    const r = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId + '&select=*', {
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+    });
+    const rows = await r.json();
+    if (!rows || !rows.length) return;
+    const call = rows[0];
+    _currentCallId = callId;
+    _currentCallType = call.call_type;
+
+    // Afficher l'overlay
+    const overlay = document.getElementById('call-overlay');
+    overlay.style.display = 'flex';
+    document.getElementById('call-avatar').textContent = (call.caller_name || '?').charAt(0).toUpperCase();
+    document.getElementById('call-name').textContent = call.caller_name || 'Appelant';
+    document.getElementById('call-status').textContent = 'Connexion...';
+    document.getElementById('call-video-btn').style.display = call.call_type === 'video' ? 'block' : 'none';
+    document.getElementById('call-timer').textContent = '';
+    _callSeconds = 0;
+
+    // Obtenir le flux local
+    _localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true, video: call.call_type === 'video'
+    });
+
+    // Créer PeerConnection
+    _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    _remoteStream = new MediaStream();
+    _localStream.getTracks().forEach(track => _peerConnection.addTrack(track, _localStream));
+    _peerConnection.ontrack = (event) => {
+      event.streams[0].getTracks().forEach(track => _remoteStream.addTrack(track));
+      let audioEl = document.getElementById('remote-audio');
+      if (!audioEl) { audioEl = document.createElement('audio'); audioEl.id = 'remote-audio'; audioEl.autoplay = true; document.body.appendChild(audioEl); }
+      audioEl.srcObject = _remoteStream;
+    };
+
+    // Appliquer l'offre
+    await _peerConnection.setRemoteDescription(new RTCSessionDescription(call.offer));
+
+    // Ajouter les ICE candidates de l'appelant
+    if (call.ice_caller && Array.isArray(call.ice_caller)) {
+      for (const c of call.ice_caller) {
+        try { await _peerConnection.addIceCandidate(new RTCIceCandidate(c)); } catch(e) {}
+      }
+    }
+
+    // Créer la réponse
+    const answer = await _peerConnection.createAnswer();
+    await _peerConnection.setLocalDescription(answer);
+
+    const iceCandidates = [];
+    _peerConnection.onicecandidate = (event) => {
+      if (event.candidate) iceCandidates.push(event.candidate.toJSON());
+    };
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Envoyer la réponse
+    await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
+      method: 'PATCH',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'answered', answer: _peerConnection.localDescription.toJSON(), ice_callee: iceCandidates })
+    });
+
+    document.getElementById('call-status').textContent = call.call_type === 'video' ? '📹 Vidéo connectée' : '🔊 Connecté';
     _callTimer = setInterval(() => {
       _callSeconds++;
-      const m = Math.floor(_callSeconds / 60);
-      const s = _callSeconds % 60;
-      document.getElementById('call-timer').textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      const mn = Math.floor(_callSeconds / 60);
+      const sc = _callSeconds % 60;
+      document.getElementById('call-timer').textContent = mn + ':' + (sc < 10 ? '0' : '') + sc;
     }, 1000);
+
+    // Polling pour détecter la fin
+    _callSignalPoll = setInterval(async () => {
+      try {
+        const r2 = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId + '&select=status', { headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey } });
+        const rows2 = await r2.json();
+        if (rows2 && rows2.length > 0 && rows2[0].status === 'ended') {
+          clearInterval(_callSignalPoll); _callSignalPoll = null;
+          endCall();
+        }
+      } catch(e) {}
+    }, 2000);
+
+  } catch(e) {
+    document.getElementById('call-status').textContent = '❌ ' + e.message;
+    setTimeout(() => endCall(), 2000);
+  }
+}
+
+function rejectCall(callId) {
+  stopRingtone();
+  const incomingDiv = document.getElementById('incoming-call');
+  if (incomingDiv) incomingDiv.style.display = 'none';
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
+    method: 'PATCH',
+    headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ status: 'rejected' })
+  }).catch(() => {});
+}
+
+// --- Polling appels entrants ---
+function startIncomingCallPoll() {
+  if (_incomingCallPoll) return;
+  _incomingCallPoll = setInterval(async () => {
+    if (!me || !me.id) return;
+    try {
+      const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+      const r = await fetch(sbUrl + '/rest/v1/konekta_calls?callee_id=eq.' + me.id + '&status=eq.ringing&order=created_at.desc&limit=1', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const rows = await r.json();
+      if (rows && rows.length > 0) {
+        const call = rows[0];
+        // Vérifier que l'appel est récent (< 30s)
+        const age = Date.now() - new Date(call.created_at).getTime();
+        if (age < 30000) showIncomingCall(call);
+      }
+    } catch(e) {}
   }, 2000);
 }
 
-function endCall() {
-  clearInterval(_callTimer);
-  _callTimer = null;
-  document.getElementById('call-overlay').style.display = 'none';
-  if (_callSeconds > 0) {
-    // Ajouter un message d'appel dans le chat
-    const duration = Math.floor(_callSeconds / 60) + ':' + (_callSeconds % 60 < 10 ? '0' : '') + (_callSeconds % 60);
-    showMsg('', 'Appel terminé (' + duration + ')', 'info');
+function showIncomingCall(call) {
+  // Ne pas montrer si déjà en appel
+  if (_currentCallId) return;
+  playRingtone('incoming');
+  let inDiv = document.getElementById('incoming-call');
+  if (!inDiv) {
+    inDiv = document.createElement('div');
+    inDiv.id = 'incoming-call';
+    inDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:linear-gradient(135deg,#0a2e1a,#11502c);padding:20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 30px rgba(0,0,0,0.5);animation:slideDown 0.3s ease';
+    document.body.appendChild(inDiv);
   }
+  const icon = call.call_type === 'video' ? '📹' : '📞';
+  inDiv.innerHTML = `
+    <div style="width:50px;height:50px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:#fff;font-weight:700;animation:pulse 1s infinite">${(call.caller_name||'?').charAt(0).toUpperCase()}</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:15px;color:#fff">${call.caller_name || 'Appelant'}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.7)">${icon} Appel ${call.call_type === 'video' ? 'vidéo' : 'vocal'} entrant...</div>
+    </div>
+    <button onclick="answerCall('${call.id}')" style="width:50px;height:50px;border-radius:50%;background:#2ECC71;border:none;color:#fff;font-size:1.3rem;cursor:pointer;animation:pulse 1s infinite">📞</button>
+    <button onclick="rejectCall('${call.id}')" style="width:50px;height:50px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.3rem;cursor:pointer">✕</button>
+  `;
+  inDiv.style.display = 'flex';
+  // Auto-hide après 30s
+  setTimeout(() => {
+    if (inDiv.style.display === 'flex') { stopRingtone(); inDiv.style.display = 'none'; }
+  }, 30000);
 }
 
 function toggleMute() {
   _callMuted = !_callMuted;
+  if (_localStream) _localStream.getAudioTracks().forEach(t => { t.enabled = !_callMuted; });
   document.getElementById('call-mute-btn').style.background = _callMuted ? '#E74C3C' : 'rgba(255,255,255,0.12)';
   document.getElementById('call-mute-btn').textContent = _callMuted ? '🔇' : '🎤';
 }
@@ -1432,7 +1761,11 @@ function toggleSpeaker() {
 }
 
 function toggleVideo() {
-  document.getElementById('call-video-btn').style.background = document.getElementById('call-video-btn').style.background === 'var(--primary)' ? 'rgba(255,255,255,0.12)' : 'var(--primary)';
+  if (_localStream) {
+    const videoTracks = _localStream.getVideoTracks();
+    videoTracks.forEach(t => { t.enabled = !t.enabled; });
+    document.getElementById('call-video-btn').style.background = videoTracks[0]?.enabled ? 'var(--primary)' : 'rgba(255,255,255,0.12)';
+  }
 }
 
 // ════════════════════════════════════════════════════════════
