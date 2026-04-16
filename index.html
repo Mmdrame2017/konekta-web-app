@@ -366,13 +366,10 @@
     .tab-btn::after { content:attr(data-label); font-size:10px; font-weight:600; display:block; }
     .tab-content { flex:1; overflow-y:auto!important; -webkit-overflow-scrolling:touch; min-height:0; padding-bottom:72px; }
 
-    /* Chat mobile : afficher/masquer liste vs conversation */
+    /* Chat mobile : masquer liste quand conversation ouverte */
     .chat-layout { flex-direction:column; height:100%; }
     .chat-list { width:100%; border-right:none; flex:1; overflow-y:auto; }
-    .chat-view { display:none!important; flex-direction:column; width:100%; height:100%; background:var(--bg); }
-    .chat-view.mobile-open { display:flex!important; }
-    .chat-layout.chat-active .chat-list { display:none!important; }
-    .chat-layout.chat-active .chat-view { display:flex!important; }
+    .chat-view { flex-direction:column; width:100%; height:100%; background:var(--bg); }
     .chat-placeholder { display:none; }
     .mobile-back-btn { display:block!important; }
 
@@ -1627,10 +1624,11 @@ function closeZoom() {
 }
 
 function closeMobileChat() {
+  if (window.innerWidth > 768) return;
+  const list = document.querySelector('.chat-list');
   const view = document.getElementById('chat-view');
-  if (view) view.classList.remove('mobile-open');
-  const layout = document.querySelector('.chat-layout');
-  if (layout) layout.classList.remove('chat-active');
+  if (list) list.style.display = 'flex';
+  if (view) view.style.display = 'none';
 }
 
 function openChat(contact) {
@@ -1643,10 +1641,12 @@ function openChat(contact) {
   });
 
   const view = document.getElementById('chat-view');
-  // Ouvrir en plein écran sur mobile
-  view.classList.add('mobile-open');
-  const layout = document.querySelector('.chat-layout');
-  if (layout) layout.classList.add('chat-active');
+  // Mobile : masquer la liste, afficher le chat
+  if (window.innerWidth <= 768) {
+    const list = document.querySelector('.chat-list');
+    if (list) list.style.display = 'none';
+    view.style.display = 'flex';
+  }
   view.innerHTML = `
     <div class="chat-header">
       <button class="icon-btn mobile-back-btn" onclick="closeMobileChat()" title="Retour" style="display:none;font-size:18px">←</button>
