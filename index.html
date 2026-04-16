@@ -709,12 +709,21 @@
 </div>
 
 <!-- Call Overlay -->
-<div id="call-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,46,26,0.97);z-index:10000;flex-direction:column;align-items:center;justify-content:center;gap:24px">
-  <div id="call-avatar" style="width:100px;height:100px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#fff;font-weight:700;box-shadow:0 0 40px rgba(142,168,50,0.3)"></div>
-  <div id="call-name" style="font-size:1.4rem;font-weight:700;color:#fff"></div>
-  <div id="call-status" style="font-size:0.9rem;color:rgba(255,255,255,0.6)"></div>
-  <div id="call-timer" style="font-size:2rem;font-weight:300;color:rgba(255,255,255,0.8);font-family:monospace"></div>
-  <div style="display:flex;gap:20px;margin-top:24px">
+<div id="call-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,46,26,0.97);z-index:10000;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+  <!-- Vidéo distante (plein écran en arrière-plan) -->
+  <video id="remote-video" autoplay playsinline style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
+  <!-- Vidéo locale (petit cadre en haut à droite) -->
+  <video id="local-video" autoplay playsinline muted style="display:none;position:absolute;top:20px;right:20px;width:120px;height:160px;object-fit:cover;border-radius:12px;border:2px solid var(--primary);z-index:2"></video>
+  <!-- Audio distant (toujours présent) -->
+  <audio id="remote-audio" autoplay playsinline></audio>
+  <!-- Infos appel (au-dessus de la vidéo) -->
+  <div id="call-info-layer" style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px">
+    <div id="call-avatar" style="width:100px;height:100px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#fff;font-weight:700;box-shadow:0 0 40px rgba(142,168,50,0.3)"></div>
+    <div id="call-name" style="font-size:1.4rem;font-weight:700;color:#fff"></div>
+    <div id="call-status" style="font-size:0.9rem;color:rgba(255,255,255,0.6)"></div>
+    <div id="call-timer" style="font-size:2rem;font-weight:300;color:rgba(255,255,255,0.8);font-family:monospace"></div>
+  </div>
+  <div style="display:flex;gap:20px;margin-top:24px;position:relative;z-index:2">
     <button onclick="toggleMute()" id="call-mute-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer" title="Muet">🎤</button>
     <button onclick="toggleSpeaker()" id="call-speaker-btn" style="width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:1.3rem;cursor:pointer" title="Haut-parleur">🔊</button>
     <button onclick="endCall()" style="width:64px;height:64px;border-radius:50%;border:none;background:#E74C3C;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.4)" title="Raccrocher">📞</button>
@@ -1477,6 +1486,12 @@ async function startCall(type) {
       video: type === 'video'
     });
 
+    // Afficher la vidéo locale si appel vidéo
+    if (type === 'video') {
+      const localVid = document.getElementById('local-video');
+      if (localVid) { localVid.srcObject = _localStream; localVid.style.display = 'block'; }
+    }
+
     // 2. Créer le PeerConnection
     _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     _remoteStream = new MediaStream();
@@ -1488,9 +1503,16 @@ async function startCall(type) {
     _peerConnection.ontrack = (event) => {
       event.streams[0].getTracks().forEach(track => _remoteStream.addTrack(track));
       // Jouer l'audio distant
-      let audioEl = document.getElementById('remote-audio');
-      if (!audioEl) { audioEl = document.createElement('audio'); audioEl.id = 'remote-audio'; audioEl.autoplay = true; document.body.appendChild(audioEl); }
-      audioEl.srcObject = _remoteStream;
+      const audioEl = document.getElementById('remote-audio');
+      const videoEl = document.getElementById('remote-video');
+      if (audioEl) audioEl.srcObject = _remoteStream;
+      if (videoEl && _remoteStream.getVideoTracks().length > 0) {
+        videoEl.srcObject = _remoteStream;
+        videoEl.style.display = 'block';
+        document.getElementById('call-info-layer').style.background = 'rgba(0,0,0,0.4)';
+        document.getElementById('call-info-layer').style.borderRadius = '16px';
+        document.getElementById('call-info-layer').style.padding = '16px';
+      }
     };
 
     // 3. Créer l'offre SDP
@@ -1579,7 +1601,11 @@ function endCall() {
   if (_localStream) { _localStream.getTracks().forEach(t => t.stop()); _localStream = null; }
   if (_peerConnection) { _peerConnection.close(); _peerConnection = null; }
   const audioEl = document.getElementById('remote-audio');
-  if (audioEl) { audioEl.srcObject = null; audioEl.remove(); }
+  if (audioEl) audioEl.srcObject = null;
+  const remoteVid = document.getElementById('remote-video');
+  if (remoteVid) { remoteVid.srcObject = null; remoteVid.style.display = 'none'; }
+  const localVid = document.getElementById('local-video');
+  if (localVid) { localVid.srcObject = null; localVid.style.display = 'none'; }
   // Mettre à jour le statut dans Supabase
   if (_currentCallId) {
     const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
@@ -1639,15 +1665,28 @@ async function answerCall(callId) {
       audio: true, video: call.call_type === 'video'
     });
 
+    // Afficher vidéo locale
+    if (call.call_type === 'video') {
+      const localVid = document.getElementById('local-video');
+      if (localVid) { localVid.srcObject = _localStream; localVid.style.display = 'block'; }
+    }
+
     // Créer PeerConnection
     _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     _remoteStream = new MediaStream();
     _localStream.getTracks().forEach(track => _peerConnection.addTrack(track, _localStream));
     _peerConnection.ontrack = (event) => {
       event.streams[0].getTracks().forEach(track => _remoteStream.addTrack(track));
-      let audioEl = document.getElementById('remote-audio');
-      if (!audioEl) { audioEl = document.createElement('audio'); audioEl.id = 'remote-audio'; audioEl.autoplay = true; document.body.appendChild(audioEl); }
-      audioEl.srcObject = _remoteStream;
+      const audioEl = document.getElementById('remote-audio');
+      const videoEl = document.getElementById('remote-video');
+      if (audioEl) audioEl.srcObject = _remoteStream;
+      if (videoEl && _remoteStream.getVideoTracks().length > 0) {
+        videoEl.srcObject = _remoteStream;
+        videoEl.style.display = 'block';
+        document.getElementById('call-info-layer').style.background = 'rgba(0,0,0,0.4)';
+        document.getElementById('call-info-layer').style.borderRadius = '16px';
+        document.getElementById('call-info-layer').style.padding = '16px';
+      }
     };
 
     // Appliquer l'offre
