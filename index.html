@@ -1893,22 +1893,29 @@ async function addProduct() {
     // Upload photo si sélectionnée
     if (_prodPhotoBase64) {
       btn.innerHTML = '<span class="loading"></span> Upload photo...';
-      const up = await apiFetch('/products/upload-image', 'POST', {
-        base64: _prodPhotoBase64, mimeType: _prodPhotoMime, filename: 'product'
-      });
-      image = up.url;
+      try {
+        const up = await apiFetch('/products/upload-image', 'POST', {
+          base64: _prodPhotoBase64, mimeType: _prodPhotoMime, filename: 'product'
+        });
+        image = up.url;
+      } catch(uploadErr) {
+        // Fallback : utiliser la photo en base64 directement comme data URL
+        image = 'data:' + (_prodPhotoMime || 'image/jpeg') + ';base64,' + _prodPhotoBase64;
+      }
     }
+    const sellerId = me.id || me.uid || me.user_id || '';
     try {
       await apiFetch('/products', 'POST', { name, description, price: parseInt(price), image, category });
     } catch(apiErr) {
       // Fallback Supabase direct
       const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
       const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
-      await fetch(sbUrl + '/rest/v1/konekta_products', {
+      const res = await fetch(sbUrl + '/rest/v1/konekta_products', {
         method: 'POST',
         headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ name, description, price: parseInt(price), image, category, seller_id: me.id, available: true })
+        body: JSON.stringify({ name, description, price: parseInt(price), image, category, seller_id: sellerId, available: true })
       });
+      if (!res.ok) throw new Error('Erreur publication: ' + await res.text());
     }
     // Reset
     _prodPhotoBase64 = null; _prodPhotoMime = null;
