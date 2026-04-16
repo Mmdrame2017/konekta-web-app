@@ -1632,8 +1632,10 @@ function closeMobileChat() {
 }
 
 function openChat(contact) {
+  try {
   currentChat = contact;
-  document.getElementById('chat-badge').classList.remove('show');
+  const badge = document.getElementById('chat-badge');
+  if (badge) badge.classList.remove('show');
 
   // Mark active in list
   document.querySelectorAll('.chat-item').forEach(el => {
@@ -1641,18 +1643,20 @@ function openChat(contact) {
   });
 
   const view = document.getElementById('chat-view');
+  if (!view) { alert('Erreur: chat-view introuvable'); return; }
   // Mobile : masquer la liste, afficher le chat
-  if (window.innerWidth <= 768) {
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile) {
     const list = document.querySelector('.chat-list');
     if (list) list.style.display = 'none';
-    view.style.display = 'flex';
   }
+  view.style.display = 'flex';
   view.innerHTML = `
     <div class="chat-header">
       <button class="icon-btn mobile-back-btn" onclick="closeMobileChat()" title="Retour" style="display:none;font-size:18px">←</button>
       <div class="chat-avatar" style="width:38px;height:38px;font-size:15px">${(contact.name||'?').charAt(0).toUpperCase()}</div>
       <div class="chat-header-info">
-        <div class="chat-header-name">${contact.name || contact.userId.slice(0,12)}</div>
+        <div class="chat-header-name">${contact.name || (contact.userId||'').slice(0,12) || 'Contact'}</div>
         <div class="chat-header-status" id="chat-status">${contact.phone || ''}</div>
       </div>
       <div class="chat-header-actions">
@@ -1674,6 +1678,7 @@ function openChat(contact) {
     <input type="file" id="file-attach-input" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" onchange="onFileAttached(this)">
   `;
   loadMessages(contact);
+  } catch(err) { alert('Erreur openChat: ' + err.message); }
 }
 
 async function loadMessages(contact) {
