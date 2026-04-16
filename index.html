@@ -1627,6 +1627,7 @@ function closeZoom() {
 }
 
 function closeMobileChat() {
+  stopChatPoll();
   if (window.innerWidth > 768) return;
   const list = document.querySelector('.chat-list');
   const view = document.getElementById('chat-view');
@@ -1680,7 +1681,9 @@ function openChat(contact) {
     </div>
     <input type="file" id="file-attach-input" style="display:none" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" onchange="onFileAttached(this)">
   `;
+  _lastMsgCount = 0;
   loadMessages(contact);
+  startChatPoll();
   } catch(err) { console.error('openChat:', err.message); }
 }
 
@@ -1781,6 +1784,32 @@ async function sendMessage() {
 
 function handleInputKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+// Auto-refresh messages toutes les 3s quand chat ouvert
+let _chatPollTimer = null;
+let _lastMsgCount = 0;
+function startChatPoll() {
+  stopChatPoll();
+  _chatPollTimer = setInterval(async () => {
+    if (!currentChat) return;
+    try {
+      const chatId = getChatId(me.id, currentChat.userId);
+      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      const r = await fetch(sbUrl + '/rest/v1/konekta_messages?chat_id=eq.' + encodeURIComponent(chatId) + '&order=created_at.asc&select=id', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const msgs = await r.json();
+      if (Array.isArray(msgs) && msgs.length !== _lastMsgCount) {
+        _lastMsgCount = msgs.length;
+        loadMessages(currentChat);
+      }
+    } catch(e) {}
+  }, 3000);
+}
+function stopChatPoll() {
+  if (_chatPollTimer) { clearInterval(_chatPollTimer); _chatPollTimer = null; }
 }
 
 let typingTimeout = null;
