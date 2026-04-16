@@ -2835,14 +2835,25 @@ function stopMarketRefresh() {
 // ════════════════════════════════════════════════════════════
 //  HELPERS
 // ════════════════════════════════════════════════════════════
+let _apiOffline = false;
 async function apiFetch(path, method='GET', body=null) {
+  if (_apiOffline) throw new Error('API offline');
   const opts = { method, headers: { 'Content-Type':'application/json', 'Authorization':`Bearer ${token}` } };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${API}${path}`, opts);
-  if (res.status === 401) { logout(); return; }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || `Erreur ${res.status}`);
-  return data;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    opts.signal = controller.signal;
+    const res = await fetch(`${API}${path}`, opts);
+    clearTimeout(timeout);
+    if (res.status === 401) { logout(); return; }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `Erreur ${res.status}`);
+    return data;
+  } catch(e) {
+    _apiOffline = true;
+    throw e;
+  }
 }
 
 function openModal(id) { document.getElementById(id).classList.add('show'); }
