@@ -79,7 +79,7 @@
     width:36px; height:36px; border-radius:50%; background:var(--primary);
     display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; cursor:pointer;
   }
-  .content { flex:1; overflow:hidden; display:flex; }
+  .content { flex:1; overflow:hidden; display:flex; min-height:0; }
 
   /* ── TABS ── */
   .sidebar {
@@ -98,7 +98,7 @@
     background:var(--secondary); border-radius:50%; display:none;
   }
   .tab-btn .badge.show { display:block; }
-  .tab-content { flex:1; overflow:hidden; display:none; flex-direction:column; min-height:0; }
+  .tab-content { flex:1; display:none; flex-direction:column; min-height:0; overflow:hidden; }
   .tab-content.active { display:flex; }
 
   /* ── CHAT LIST ── */
@@ -197,7 +197,7 @@
   /* ── MARKETPLACE ── */
   .marketplace-header { padding:16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
   .marketplace-header h3 { font-size:16px; font-weight:700; }
-  .products-grid { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; align-content:start; min-height:0; }
+  .products-grid { padding:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; align-content:start; }
   .product-card {
     background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
     overflow:hidden; transition:.2s; cursor:pointer;
@@ -490,7 +490,7 @@
     </div>
 
     <!-- ── TAB: MARKETPLACE ── -->
-    <div class="tab-content scrollbar-custom" id="tab-marketplace" style="flex-direction:column">
+    <div class="tab-content scrollbar-custom" id="tab-marketplace" style="flex-direction:column;overflow-y:auto">
       <div class="marketplace-header">
         <h3>🛍️ Marketplace</h3>
         <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="openAddProductModal()">+ Vendre</button>
