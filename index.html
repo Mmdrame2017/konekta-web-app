@@ -1496,7 +1496,7 @@ async function startCall(type) {
     }
 
     // 2. Créer le PeerConnection
-    _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceTransportPolicy: 'relay' });
+    _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     _remoteStream = new MediaStream();
 
     // Ajouter les pistes locales
@@ -1710,7 +1710,7 @@ async function answerCall(callId) {
     }
 
     // Créer PeerConnection
-    _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceTransportPolicy: 'relay' });
+    _peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     _remoteStream = new MediaStream();
     _localStream.getTracks().forEach(track => _peerConnection.addTrack(track, _localStream));
     _peerConnection.ontrack = (event) => {
