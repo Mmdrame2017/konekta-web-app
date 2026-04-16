@@ -472,10 +472,12 @@
         <div class="chat-list">
           <div class="chat-list-header">
             <h3>Messages</h3>
-            <div class="search-box">
+            <div class="search-box" style="position:relative">
               <span>🔍</span>
-              <input type="text" id="search-phone" placeholder="Chercher par téléphone..." oninput="searchContact()">
+              <input type="text" id="search-phone" placeholder="Nom ou téléphone..." oninput="autoCompleteContact()" onkeydown="if(event.key==='Enter')quickSearchChat()">
+              <button onclick="quickSearchChat()" style="background:var(--primary);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">OK</button>
             </div>
+            <div id="autocomplete-results" style="display:none;position:absolute;left:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:0 0 12px 12px;max-height:200px;overflow-y:auto;z-index:50"></div>
           </div>
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
           <div style="margin:12px;display:flex;gap:8px">
@@ -1552,16 +1554,75 @@ function openNewChatModal() {
   openModal('modal-new-chat');
 }
 
-async function searchContact() {
-  const phone = document.getElementById('search-phone').value.trim();
-  // Attendre un numéro complet (min 9 chiffres) avant de chercher
-  const digits = phone.replace(/\D/g,'');
-  if (digits.length < 9) return;
-  try {
-    const data = await apiFetch(`/users/search?phone=${encodeURIComponent(phone)}`);
-    if (data && data.id) openChat({ userId: data.id, name: data.name || data.phone, phone: data.phone });
-  } catch(e) {}
+let _autoCompleteTimer = null;
+async function autoCompleteContact() {
+  clearTimeout(_autoCompleteTimer);
+  const query = document.getElementById('search-phone').value.trim();
+  const resultsDiv = document.getElementById('autocomplete-results');
+  if (query.length < 2) { resultsDiv.style.display = 'none'; return; }
+  _autoCompleteTimer = setTimeout(async () => {
+    try {
+      const sbUrl = SUPA_FB_URL;
+      const sbKey = SUPA_FB_KEY;
+      // Chercher par nom OU téléphone (ilike pour partial match)
+      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(name.ilike.*' + encodeURIComponent(query) + '*,phone.ilike.*' + encodeURIComponent(query) + '*)&select=id,name,phone&limit=8', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const users = await r.json();
+      if (!Array.isArray(users) || users.length === 0) {
+        resultsDiv.innerHTML = '<div style="padding:12px;color:var(--text2);font-size:13px;text-align:center">Aucun résultat</div>';
+        resultsDiv.style.display = 'block';
+        return;
+      }
+      resultsDiv.innerHTML = users.filter(u => u.id !== me.id).map(u => `
+        <div onclick="selectAutoComplete('${u.id}','${(u.name||'').replace(/'/g,'')}','${u.phone||''}')" style="padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0">${(u.name||u.phone||'?').charAt(0).toUpperCase()}</div>
+          <div><div style="font-size:13px;font-weight:600">${u.name || 'Sans nom'}</div><div style="font-size:11px;color:var(--text2)">${u.phone || ''}</div></div>
+        </div>
+      `).join('');
+      resultsDiv.style.display = 'block';
+    } catch(e) { resultsDiv.style.display = 'none'; }
+  }, 300);
 }
+
+function selectAutoComplete(userId, name, phone) {
+  document.getElementById('autocomplete-results').style.display = 'none';
+  document.getElementById('search-phone').value = '';
+  openChat({ userId, name: name || phone, phone });
+}
+
+async function quickSearchChat() {
+  const query = document.getElementById('search-phone').value.trim();
+  if (!query) return;
+  document.getElementById('autocomplete-results').style.display = 'none';
+  const digits = query.replace(/\D/g, '');
+  const sbUrl = SUPA_FB_URL;
+  const sbKey = SUPA_FB_KEY;
+  try {
+    let user = null;
+    // Chercher par nom exact ou téléphone
+    const variants = digits.length >= 7 ? [query, digits, '+221' + (digits.startsWith('221') ? digits.slice(3) : digits)] : [query];
+    for (const q of variants) {
+      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(phone.eq.' + encodeURIComponent(q) + ',name.ilike.*' + encodeURIComponent(q) + '*)&select=id,name,phone&limit=1', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length > 0) { user = rows[0]; break; }
+    }
+    if (user && user.id !== me.id) {
+      document.getElementById('search-phone').value = '';
+      openChat({ userId: user.id, name: user.name || user.phone, phone: user.phone });
+    } else {
+      alert('Contact non trouvé : ' + query);
+    }
+  } catch(e) { alert('Erreur recherche : ' + e.message); }
+}
+
+// Fermer autocomplétion si on clique ailleurs
+document.addEventListener('click', e => {
+  const ac = document.getElementById('autocomplete-results');
+  if (ac && !e.target.closest('.search-box') && !e.target.closest('#autocomplete-results')) ac.style.display = 'none';
+});
 
 let foundContact = null;
 async function startChat() {
