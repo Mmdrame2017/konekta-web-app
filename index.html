@@ -1472,10 +1472,11 @@ async function startCall(type) {
   if (!currentChat) return;
   _currentCallType = type;
   await openCallRoom(type);
-  return;
+}
 
-  // --- Code WebRTC natif gardé pour plus tard ---
-  try {
+// --- SUPPRIMÉ: ancien code WebRTC ---
+// (gardé dans les archives si besoin)
+function _placeholder_webrtc() { try {
     _localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: type === 'video'
@@ -1617,10 +1618,8 @@ async function startCall(type) {
 
   } catch(e) {
     stopRingtone();
-    document.getElementById('call-status').textContent = '❌ ' + e.message;
-    setTimeout(() => endCall(), 2000);
-  }
-}
+    document.getElementById('call-status').textContent = '❌ ';
+  } catch(e2) {} }
 
 // --- Raccrocher ---
 function endCall() {
