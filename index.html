@@ -1679,9 +1679,8 @@ async function answerCall(callId) {
 
     // Ouvrir Jitsi dans un nouvel onglet
     if (call.offer && call.offer.room) {
-      const jitsiDomain = 'n8n.srv1424726.hstgr.cloud:8443';
-      const params = '#config.prejoinConfig.enabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=' + (call.call_type === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
-      window.open('https://' + jitsiDomain + '/' + call.offer.room + params, '_blank');
+      const params = '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (call.call_type === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
+      window.open('https://meet.jit.si/' + call.offer.room + params, '_blank');
     }
       // Marquer comme answered
       await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
@@ -1796,10 +1795,9 @@ async function openCallRoom(callType) {
   const callData = await callRes.json();
   _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
 
-  // 2. Ouvrir Jitsi dans un nouvel onglet (ton propre serveur)
-  const jitsiDomain = 'n8n.srv1424726.hstgr.cloud:8443';
-  const params = '#config.prejoinConfig.enabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=' + (callType === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
-  window.open('https://' + jitsiDomain + '/' + roomId + params, '_blank');
+  // 2. Ouvrir Jitsi Meet en nouvel onglet
+  const params = '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (callType === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
+  window.open('https://meet.jit.si/' + roomId + params, '_blank');
 
   // 3. Fermer l'overlay
   const overlay = document.getElementById('call-overlay');
