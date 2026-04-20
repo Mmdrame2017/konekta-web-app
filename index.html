@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Konekta — Super App</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://meet.jit.si/external_api.js" defer></script>
+<script src="https://n8n.srv1424726.hstgr.cloud:8443/external_api.js" defer></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -1474,7 +1474,7 @@ async function startCall(type) {
 
   // Utiliser Jitsi Meet pour les appels (fiable 100%)
   const jitsiRoomId = 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30);
-  const jitsiUrl = 'https://meet.jit.si/' + jitsiRoomId + '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (type === 'audio' ? 'true' : 'false') + '&config.prejoinPageEnabled=false&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.SHOW_WATERMARK_FOR_GUESTS=false';
+  const jitsiUrl = 'https://n8n.srv1424726.hstgr.cloud:8443/' + jitsiRoomId + '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (type === 'audio' ? 'true' : 'false') + '&config.prejoinPageEnabled=false&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.SHOW_WATERMARK_FOR_GUESTS=false';
 
   // Enregistrer l'appel dans Supabase pour notifier l'appelé
   try {
@@ -1828,7 +1828,7 @@ function openJitsiRoom(roomId, callType) {
     'config.disableDeepLinking=true',
     'userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'Konekta User')
   ].join('&');
-  const url = 'https://meet.jit.si/' + roomId + '#' + params;
+  const url = 'https://n8n.srv1424726.hstgr.cloud:8443/' + roomId + '#' + params;
   window.open(url, '_blank');
   // Fermer l'overlay
   const overlay = document.getElementById('call-overlay');
@@ -2762,7 +2762,7 @@ async function buyProduct() {
       // Fallback : créer la session Wave via n8n + enregistrer en Supabase
       const successUrl = window.location.href.split('?')[0] + '?knk_paid=1&ref=' + reference;
       const errorUrl = window.location.href.split('?')[0] + '?knk_error=1&ref=' + reference;
-      const waveRes = await fetch('https://meet.jit.si/webhook/wave-checkout', {
+      const waveRes = await fetch('https://n8n.srv1424726.hstgr.cloud:8443/webhook/wave-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, reference, client_nom: me.name || 'Acheteur Konekta', app: 'konekta', success_url: successUrl, error_url: errorUrl })
