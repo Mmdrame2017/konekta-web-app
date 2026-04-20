@@ -1471,38 +1471,7 @@ function stopRingtone() {
 async function startCall(type) {
   if (!currentChat) return;
   _currentCallType = type;
-
-  // Utiliser Jitsi Meet pour les appels (fiable 100%)
-  const jitsiRoomId = 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,30);
-  const jitsiUrl = 'https://n8n.srv1424726.hstgr.cloud:8443/' + jitsiRoomId + '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (type === 'audio' ? 'true' : 'false') + '&config.prejoinPageEnabled=false&interfaceConfig.SHOW_JITSI_WATERMARK=false&interfaceConfig.SHOW_WATERMARK_FOR_GUESTS=false';
-
-  // Enregistrer l'appel dans Supabase pour notifier l'appelé
-  try {
-    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
-    await fetch(sbUrl + '/rest/v1/konekta_calls', {
-      method: 'POST',
-      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        caller_id: me.id, callee_id: currentChat.userId,
-        caller_name: me.name || me.phone || 'Appelant',
-        call_type: type, status: 'ringing',
-        offer: { jitsiRoom: jitsiRoomId, jitsiUrl: jitsiUrl }
-      })
-    });
-  } catch(e) {}
-
-  // Ouvrir Jitsi via l'API IFrame
-  const overlay = document.getElementById('call-overlay');
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div style="position:absolute;top:12px;left:12px;z-index:3">
-      <button onclick="endJitsiCall()" style="width:48px;height:48px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 15px rgba(231,76,60,0.4)">✕</button>
-    </div>
-    <div id="jitsi-container" style="position:absolute;inset:0;width:100%;height:100%"></div>
-  `;
-  openJitsiRoom(jitsiRoomId, type);
-  playRingtone('outgoing');
-  setTimeout(stopRingtone, 5000);
+  await openCallRoom(type);
   return;
 
   // --- Code WebRTC natif gardé pour plus tard ---
@@ -1701,7 +1670,6 @@ async function answerCall(callId) {
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
   _currentCallId = callId;
   try {
-    // Récupérer l'appel
     const r = await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId + '&select=*', {
       headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
     });
@@ -1709,17 +1677,12 @@ async function answerCall(callId) {
     if (!rows || !rows.length) return;
     const call = rows[0];
 
-    // Si c'est un appel Jitsi, ouvrir l'iframe
-    if (call.offer && call.offer.jitsiRoom) {
-      const overlay = document.getElementById('call-overlay');
-      overlay.style.display = 'flex';
-      overlay.innerHTML = `
-        <div style="position:absolute;top:12px;left:12px;z-index:3">
-          <button onclick="endJitsiCall()" style="width:48px;height:48px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 15px rgba(231,76,60,0.4)">✕</button>
-        </div>
-        <div id="jitsi-container" style="position:absolute;inset:0;width:100%;height:100%"></div>
-      `;
-      openJitsiRoom(call.offer.jitsiRoom, call.call_type);
+    // Ouvrir Jitsi dans un nouvel onglet
+    if (call.offer && call.offer.room) {
+      const jitsiDomain = 'n8n.srv1424726.hstgr.cloud:8443';
+      const params = '#config.prejoinConfig.enabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=' + (call.call_type === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
+      window.open('https://' + jitsiDomain + '/' + call.offer.room + params, '_blank');
+    }
       // Marquer comme answered
       await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
         method: 'PATCH',
@@ -1819,20 +1782,32 @@ function showIncomingCall(call) {
   }, 30000);
 }
 
-function openJitsiRoom(roomId, callType) {
-  // Ouvrir dans un nouvel onglet (fonctionne 100% sur tous les appareils)
-  const params = [
-    'config.prejoinConfig.enabled=false',
-    'config.startWithAudioMuted=false',
-    'config.startWithVideoMuted=' + (callType === 'audio'),
-    'config.disableDeepLinking=true',
-    'userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'Konekta User')
-  ].join('&');
-  const url = 'https://n8n.srv1424726.hstgr.cloud:8443/' + roomId + '#' + params;
-  window.open(url, '_blank');
-  // Fermer l'overlay
+async function openCallRoom(callType) {
+  if (!currentChat) return;
+  const roomId = 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,40);
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json' };
+
+  // 1. Enregistrer l'appel
+  const callRes = await fetch(sbUrl + '/rest/v1/konekta_calls', {
+    method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
+    body: JSON.stringify({ caller_id: me.id, callee_id: currentChat.userId, caller_name: me.name || me.phone || '', call_type: callType, status: 'ringing', offer: { room: roomId } })
+  });
+  const callData = await callRes.json();
+  _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+
+  // 2. Ouvrir Jitsi dans un nouvel onglet (ton propre serveur)
+  const jitsiDomain = 'n8n.srv1424726.hstgr.cloud:8443';
+  const params = '#config.prejoinConfig.enabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=' + (callType === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
+  window.open('https://' + jitsiDomain + '/' + roomId + params, '_blank');
+
+  // 3. Fermer l'overlay
   const overlay = document.getElementById('call-overlay');
   if (overlay) { overlay.innerHTML = ''; overlay.style.display = 'none'; }
+
+  // 4. Sonnerie
+  playRingtone('outgoing');
+  setTimeout(stopRingtone, 5000);
 }
 
 function endJitsiCall() {
