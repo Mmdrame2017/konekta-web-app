@@ -1493,10 +1493,13 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         hideConferenceSubject: true,
         hideConferenceTimer: true,
         disableModeratorIndicator: true,
+        disableRemoteMute: true,
+        remoteVideoMenu: { disableKick: true, disableGrantModerator: true },
         notifications: [],
         disableThirdPartyRequests: true,
         disableInviteFunctions: true,
         enableClosePage: false,
+        filmstrip: { disableStageFilmstrip: false },
         p2p: { enabled: true }
       },
       interfaceConfigOverwrite: {
@@ -1506,13 +1509,15 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         SHOW_POWERED_BY: false,
         TOOLBAR_BUTTONS: [],
         TOOLBAR_ALWAYS_VISIBLE: false,
-        FILM_STRIP_MAX_HEIGHT: 120,
+        FILM_STRIP_MAX_HEIGHT: 150,
+        VERTICAL_FILMSTRIP: true,
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
         HIDE_INVITE_MORE_HEADER: true,
         MOBILE_APP_PROMO: false,
         DISABLE_FOCUS_INDICATOR: true,
         DEFAULT_REMOTE_DISPLAY_NAME: 'Konekta',
-        GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false
+        GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false,
+        DISABLE_VIDEO_BACKGROUND: false
       },
       userInfo: { displayName: displayName || 'User' }
     });
@@ -1720,12 +1725,16 @@ function jitsiToggleVideo() {
   btn.style.background = isOff ? 'rgba(255,255,255,0.15)' : '#E74C3C';
   btn.textContent = isOff ? '\uD83D\uDCF9' : '\uD83D\uDEAB';
 }
-function jitsiSwitchCamera() {
+let _jitsiCamIndex = 0;
+async function jitsiSwitchCamera() {
   if (!window._jitsiApi) return;
-  // L'API Jitsi IFrame ne supporte pas directement le switch camera
-  // On utilise toggleVideo off/on pour forcer un re-grab de la caméra
-  window._jitsiApi.executeCommand('toggleVideo');
-  setTimeout(() => { if (window._jitsiApi) window._jitsiApi.executeCommand('toggleVideo'); }, 500);
+  try {
+    const devices = await window._jitsiApi.getAvailableDevices();
+    const cams = devices.videoInput || [];
+    if (cams.length < 2) return;
+    _jitsiCamIndex = (_jitsiCamIndex + 1) % cams.length;
+    window._jitsiApi.setVideoInputDevice(cams[_jitsiCamIndex].label, cams[_jitsiCamIndex].deviceId);
+  } catch(e) { console.error('switchCamera:', e); }
 }
 // Compat ancien code
 function toggleMute() { jitsiToggleMute(); }
