@@ -1867,26 +1867,44 @@ function appendAudioMessage(senderId, audioData, duration) {
   const area = document.getElementById('messages-area');
   if (!area) return;
   const isMine = senderId === me.id;
+  const audioId = 'aud-local-' + Date.now();
+  window._audioCache = window._audioCache || {};
+  window._audioCache[audioId] = audioData;
+  const time = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
   const div = document.createElement('div');
-  div.className = 'message ' + (isMine ? 'sent' : 'received');
-  div.innerHTML = '<div style="display:flex;align-items:center;gap:8px;min-width:180px"><button onclick="playAudioMsg(this)" style="width:32px;height:32px;border-radius:50%;border:none;background:' + (isMine ? 'rgba(255,255,255,0.2)' : 'var(--primary)') + ';color:#fff;font-size:14px;cursor:pointer;flex-shrink:0">\u25B6</button><div style="flex:1;height:4px;background:rgba(255,255,255,0.2);border-radius:2px"><div class="audio-progress" style="height:100%;width:0%;background:#fff;border-radius:2px;transition:width 0.1s"></div></div><span style="font-size:11px;opacity:0.7;flex-shrink:0">' + duration + '</span></div><audio src="' + audioData + '" preload="none"></audio>';
-  area.appendChild(div);
+  div.innerHTML = '<div class="msg-bubble ' + (isMine ? 'sent' : 'recv') + '" style="padding:8px 12px"><div style="display:flex;align-items:center;gap:8px;min-width:160px"><button onclick="playAudioMsg(this,\'' + audioId + '\')" style="width:30px;height:30px;border-radius:50%;border:none;background:' + (isMine ? 'rgba(255,255,255,0.2)' : 'var(--primary)') + ';color:#fff;font-size:13px;cursor:pointer;flex-shrink:0">\u25B6</button><div style="flex:1;height:3px;background:rgba(255,255,255,0.2);border-radius:2px"><div class="audio-progress" style="height:100%;width:0%;background:#fff;border-radius:2px;transition:width 0.1s"></div></div><span style="font-size:10px;opacity:0.7;flex-shrink:0">' + duration + '</span></div><div class="msg-time">' + time + '</div></div>';
+  area.appendChild(div.firstElementChild);
   area.scrollTop = area.scrollHeight;
 }
 
-function playAudioMsg(btn) {
-  const msgDiv = btn.closest('.message');
-  const audio = msgDiv.querySelector('audio');
-  const progress = msgDiv.querySelector('.audio-progress');
-  if (!audio) return;
-  if (!audio.paused) { audio.pause(); btn.textContent = '\u25B6'; return; }
-  // Arrêter les autres lecteurs
-  document.querySelectorAll('.message audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
-  document.querySelectorAll('.message button').forEach(b => { if (b !== btn && b.textContent === '\u23F8') b.textContent = '\u25B6'; });
+let _currentAudioPlayer = null;
+function playAudioMsg(btn, audioId) {
+  const msgDiv = btn.closest('.msg-bubble');
+  const progress = msgDiv ? msgDiv.querySelector('.audio-progress') : null;
+  // Arrêter le lecteur précédent
+  if (_currentAudioPlayer && _currentAudioPlayer !== btn) {
+    _currentAudioPlayer._audio?.pause();
+    _currentAudioPlayer.textContent = '\u25B6';
+    const prevP = _currentAudioPlayer.closest('.msg-bubble')?.querySelector('.audio-progress');
+    if (prevP) prevP.style.width = '0%';
+  }
+  // Toggle play/pause
+  if (btn._audio && !btn._audio.paused) {
+    btn._audio.pause();
+    btn.textContent = '\u25B6';
+    return;
+  }
+  // Créer l'audio si pas encore fait
+  if (!btn._audio) {
+    const src = window._audioCache && window._audioCache[audioId];
+    if (!src) { console.error('[AUDIO] Pas de données pour', audioId); return; }
+    btn._audio = new Audio(src);
+  }
   btn.textContent = '\u23F8';
-  audio.play();
-  audio.ontimeupdate = () => { if (progress) progress.style.width = (audio.currentTime / audio.duration * 100) + '%'; };
-  audio.onended = () => { btn.textContent = '\u25B6'; if (progress) progress.style.width = '0%'; };
+  _currentAudioPlayer = btn;
+  btn._audio.play().catch(e => console.error('[AUDIO] Play error:', e));
+  btn._audio.ontimeupdate = () => { if (progress && btn._audio.duration) progress.style.width = (btn._audio.currentTime / btn._audio.duration * 100) + '%'; };
+  btn._audio.onended = () => { btn.textContent = '\u25B6'; if (progress) progress.style.width = '0%'; };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2212,13 +2230,14 @@ function appendMessage(msg, isHistory=false) {
   } else if (msg.type === 'voice' || msg.type === 'audio') {
     let audioData = '', duration = '0:00';
     try { const p = JSON.parse(msg.content); audioData = p.audio; duration = p.duration || '0:00'; } catch(e) {}
+    const audioId = 'aud-' + (msg.id || Math.random().toString(36).slice(2,8));
+    if (audioData) window._audioCache = window._audioCache || {}, window._audioCache[audioId] = audioData;
     html = `<div class="msg-bubble ${isSent?'sent':'recv'}" style="padding:8px 12px">
       <div style="display:flex;align-items:center;gap:8px;min-width:160px">
-        <button onclick="playAudioMsg(this)" style="width:30px;height:30px;border-radius:50%;border:none;background:${isSent?'rgba(255,255,255,0.2)':'var(--primary)'};color:#fff;font-size:13px;cursor:pointer;flex-shrink:0">\u25B6</button>
+        <button onclick="playAudioMsg(this,'${audioId}')" style="width:30px;height:30px;border-radius:50%;border:none;background:${isSent?'rgba(255,255,255,0.2)':'var(--primary)'};color:#fff;font-size:13px;cursor:pointer;flex-shrink:0">\u25B6</button>
         <div style="flex:1;height:3px;background:rgba(255,255,255,0.2);border-radius:2px"><div class="audio-progress" style="height:100%;width:0%;background:#fff;border-radius:2px;transition:width 0.1s"></div></div>
         <span style="font-size:10px;opacity:0.7;flex-shrink:0">${duration}</span>
       </div>
-      <audio src="${audioData}" preload="none"></audio>
       <div class="msg-time">${time}</div>
     </div>`;
   } else {
