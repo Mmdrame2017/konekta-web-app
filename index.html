@@ -1474,9 +1474,8 @@ async function startCall(type) {
   await openCallRoom(type);
 }
 
-// --- SUPPRIMÉ: ancien code WebRTC ---
-// (gardé dans les archives si besoin)
-function _placeholder_webrtc() { try {
+/* ANCIEN CODE WebRTC SUPPRIMÉ */
+function _dead_code() { /* try {
     _localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: type === 'video'
@@ -1619,7 +1618,7 @@ function _placeholder_webrtc() { try {
   } catch(e) {
     stopRingtone();
     document.getElementById('call-status').textContent = '❌ ';
-  } catch(e2) {} }
+*/ }
 
 // --- Raccrocher ---
 function endCall() {
