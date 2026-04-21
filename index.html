@@ -878,6 +878,34 @@
   </div>
 </div>
 
+<!-- Group Info -->
+<div class="modal-overlay" id="modal-group-info">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="group-info-title">👥 Info du groupe</h3>
+      <button class="close-btn" onclick="closeModal('modal-group-info')">✕</button>
+    </div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:16px" id="group-info-desc"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">Membres <span id="group-member-count" style="color:var(--text2);font-weight:400"></span></div>
+      <button class="btn btn-primary" style="width:auto;padding:6px 14px;font-size:12px" onclick="showAddMemberForm()" id="group-add-btn">+ Ajouter</button>
+    </div>
+    <!-- Formulaire ajout membre (caché par défaut) -->
+    <div id="group-add-form" style="display:none;margin-bottom:12px;background:var(--bg3);border-radius:var(--radius);padding:12px">
+      <div class="search-box" style="margin-bottom:8px">
+        <span>🔍</span>
+        <input type="text" id="group-add-search" placeholder="Nom ou téléphone..." oninput="searchGroupMember()">
+      </div>
+      <div id="group-add-results" style="max-height:150px;overflow-y:auto"></div>
+    </div>
+    <!-- Liste des membres -->
+    <div id="group-members-list" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-group-info')" style="color:var(--text2)">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Buy Product -->
 <div class="modal-overlay" id="modal-buy-product">
   <div class="modal">
@@ -1457,8 +1485,126 @@ async function loadChats() {
   } catch(e) { console.error('loadChats:', e.message); }
 }
 
+let _currentGroupId = null;
 function openGroupChat(groupId, name, avatar) {
-  openChat({ userId: 'group_' + groupId, name: name, phone: 'Groupe', avatar: '' });
+  _currentGroupId = groupId;
+  openChat({ userId: 'group_' + groupId, name: name, phone: 'Groupe', avatar: '', isGroup: true, groupId: groupId });
+}
+
+async function openGroupInfo() {
+  if (!_currentGroupId) return;
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
+  // Charger le groupe
+  try {
+    const gr = await fetch(sbUrl + '/rest/v1/konekta_groups?id=eq.' + _currentGroupId + '&select=*', { headers: sbH });
+    const grps = await gr.json();
+    if (grps && grps.length > 0) {
+      document.getElementById('group-info-title').textContent = (grps[0].avatar || '👥') + ' ' + (grps[0].name || 'Groupe');
+      document.getElementById('group-info-desc').textContent = grps[0].description || '';
+    }
+  } catch(e) {}
+  document.getElementById('group-add-form').style.display = 'none';
+  document.getElementById('group-add-search').value = '';
+  document.getElementById('group-add-results').innerHTML = '';
+  await loadGroupMembers();
+  openModal('modal-group-info');
+}
+
+async function loadGroupMembers() {
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
+  const list = document.getElementById('group-members-list');
+  const countEl = document.getElementById('group-member-count');
+  const addBtn = document.getElementById('group-add-btn');
+  try {
+    const r = await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&select=user_id,role,konekta_users(id,name,phone,avatar)', { headers: sbH });
+    const members = await r.json();
+    if (!Array.isArray(members)) { list.innerHTML = '<div style="color:var(--text2);padding:8px">Erreur chargement</div>'; return; }
+    countEl.textContent = '(' + members.length + ')';
+    // Vérifier si je suis admin
+    const isAdmin = members.some(m => m.user_id === me.id && m.role === 'admin');
+    addBtn.style.display = isAdmin ? '' : 'none';
+    list.innerHTML = members.map(m => {
+      const u = m.konekta_users || {};
+      const name = u.name || u.phone || m.user_id.slice(0,8);
+      const initial = (name||'?').charAt(0).toUpperCase();
+      const avatarHtml = u.avatar
+        ? '<img src="' + u.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+        : initial;
+      const isMe = m.user_id === me.id;
+      const roleTag = m.role === 'admin' ? '<span style="font-size:10px;background:rgba(0,168,132,0.15);color:var(--primary);padding:2px 6px;border-radius:10px;margin-left:6px">Admin</span>' : '';
+      const removeBtn = (isAdmin && !isMe)
+        ? '<button onclick="removeGroupMember(\'' + m.user_id + '\')" style="background:none;border:none;color:#E74C3C;font-size:16px;cursor:pointer;padding:4px 8px" title="Retirer">✕</button>'
+        : '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border)">'
+        + '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0;overflow:hidden">' + avatarHtml + '</div>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">' + name + (isMe ? ' (vous)' : '') + roleTag + '</div><div style="font-size:11px;color:var(--text2)">' + (u.phone || '') + '</div></div>'
+        + removeBtn + '</div>';
+    }).join('');
+  } catch(e) { list.innerHTML = '<div style="color:var(--text2);padding:8px">Erreur: ' + e.message + '</div>'; }
+}
+
+function showAddMemberForm() {
+  const form = document.getElementById('group-add-form');
+  form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  if (form.style.display === 'block') document.getElementById('group-add-search').focus();
+}
+
+let _grpSearchTimer = null;
+async function searchGroupMember() {
+  clearTimeout(_grpSearchTimer);
+  const query = document.getElementById('group-add-search').value.trim();
+  const results = document.getElementById('group-add-results');
+  if (query.length < 2) { results.innerHTML = ''; return; }
+  _grpSearchTimer = setTimeout(async () => {
+    try {
+      const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(name.ilike.*' + encodeURIComponent(query) + '*,phone.ilike.*' + encodeURIComponent(query) + '*)&select=id,name,phone,avatar&limit=8', {
+        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+      });
+      const users = await r.json();
+      if (!Array.isArray(users) || users.length === 0) {
+        results.innerHTML = '<div style="padding:8px;color:var(--text2);font-size:12px">Aucun résultat</div>';
+        return;
+      }
+      results.innerHTML = users.filter(u => u.id !== me.id).map(u => {
+        const av = u.avatar ? '<img src="' + u.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (u.name||u.phone||'?').charAt(0).toUpperCase();
+        return '<div onclick="addGroupMember(\'' + u.id + '\')" style="display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:8px;transition:background 0.15s" onmouseover="this.style.background=\'var(--bg2)\'" onmouseout="this.style.background=\'transparent\'">'
+          + '<div style="width:28px;height:28px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;flex-shrink:0;overflow:hidden">' + av + '</div>'
+          + '<div><div style="font-size:13px;font-weight:600">' + (u.name || 'Sans nom') + '</div><div style="font-size:11px;color:var(--text2)">' + (u.phone || '') + '</div></div></div>';
+      }).join('');
+    } catch(e) { results.innerHTML = ''; }
+  }, 300);
+}
+
+async function addGroupMember(userId) {
+  if (!_currentGroupId) return;
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  try {
+    await fetch(sbUrl + '/rest/v1/konekta_group_members', {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ group_id: _currentGroupId, user_id: userId, role: 'member' })
+    });
+    document.getElementById('group-add-search').value = '';
+    document.getElementById('group-add-results').innerHTML = '';
+    document.getElementById('group-add-form').style.display = 'none';
+    await loadGroupMembers();
+  } catch(e) { alert('Erreur: ' + e.message); }
+}
+
+async function removeGroupMember(userId) {
+  if (!_currentGroupId) return;
+  if (!confirm('Retirer ce membre du groupe ?')) return;
+  const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+  try {
+    await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&user_id=eq.' + userId, {
+      method: 'DELETE',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+    });
+    await loadGroupMembers();
+  } catch(e) { alert('Erreur: ' + e.message); }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2222,6 +2368,7 @@ function closeMobileChat() {
 function openChat(contact) {
   try {
   currentChat = contact;
+  _currentGroupId = contact.groupId || null;
   const badge = document.getElementById('chat-badge');
   if (badge) badge.classList.remove('show');
 
@@ -2248,9 +2395,7 @@ function openChat(contact) {
         <div class="chat-header-status" id="chat-status">${contact.phone || ''}</div>
       </div>
       <div class="chat-header-actions">
-        <button class="icon-btn" onclick="startCall('audio')" title="Appel vocal">📞</button>
-        <button class="icon-btn" onclick="startCall('video')" title="Appel vidéo">📹</button>
-        <button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l'argent">💳</button>
+        ${contact.isGroup ? '<button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>' : '<button class="icon-btn" onclick="startCall(\'audio\')" title="Appel vocal">📞</button><button class="icon-btn" onclick="startCall(\'video\')" title="Appel vidéo">📹</button><button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
       </div>
     </div>
     <div class="messages-area scrollbar-custom" id="messages-area"></div>
