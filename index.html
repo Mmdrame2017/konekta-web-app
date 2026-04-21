@@ -714,10 +714,10 @@
   <div id="jitsi-container" style="position:absolute;inset:0;z-index:1"></div>
   <!-- Contrôles Konekta par-dessus le iframe — z-index élevé + pointer-events -->
   <div id="call-controls" style="position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:14px;padding:16px 0 calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,0.9));z-index:9999;pointer-events:auto">
-    <button ontouchend="jitsiToggleMute();event.preventDefault()" onclick="jitsiToggleMute()" id="call-mute-btn" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.18);color:#fff;font-size:1.3rem;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation" title="Micro">🎤</button>
-    <button ontouchend="jitsiToggleVideo();event.preventDefault()" onclick="jitsiToggleVideo()" id="call-video-btn" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.18);color:#fff;font-size:1.3rem;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation" title="Caméra">📹</button>
-    <button ontouchend="jitsiHangup();event.preventDefault()" onclick="jitsiHangup()" style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(231,76,60,0.5);background:#E74C3C;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.5);-webkit-tap-highlight-color:transparent;touch-action:manipulation" title="Raccrocher">📞</button>
-    <button ontouchend="jitsiSwitchCamera();event.preventDefault()" onclick="jitsiSwitchCamera()" id="call-switch-btn" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.18);color:#fff;font-size:1.3rem;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation" title="Changer caméra">🔄</button>
+    <button onclick="jitsiToggleMute()" id="call-mute-btn" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.18);color:#fff;font-size:1.3rem;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:99999" title="Micro">🎤</button>
+    <button onclick="jitsiToggleVideo()" id="call-video-btn" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.18);color:#fff;font-size:1.3rem;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:99999" title="Caméra">📹</button>
+    <button onclick="jitsiHangup()" style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(231,76,60,0.5);background:#E74C3C;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.5);touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:99999" title="Raccrocher">📞</button>
+    <button onclick="jitsiSwitchCamera()" id="call-switch-btn" style="width:52px;height:52px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.18);color:#fff;font-size:1.3rem;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;position:relative;z-index:99999" title="Changer caméra">🔄</button>
   </div>
   <div id="call-timer-bar" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#fff;padding:6px 18px;border-radius:20px;font-family:monospace;font-size:1rem;z-index:9999;pointer-events:none">00:00</div>
 </div>
@@ -1777,23 +1777,35 @@ function startCallStatusPoll() {
 
 // --- Contrôles Jitsi via l'API ---
 function jitsiToggleMute() {
-  if (!window._jitsiApi) return;
-  window._jitsiApi.executeCommand('toggleAudio');
-  _callMuted = !_callMuted;
-  document.getElementById('call-mute-btn').style.background = _callMuted ? '#E74C3C' : 'rgba(255,255,255,0.15)';
-  document.getElementById('call-mute-btn').textContent = _callMuted ? '\uD83D\uDD07' : '\uD83C\uDF99';
+  if (!window._jitsiApi) { console.log('[BTN] No jitsiApi'); return; }
+  console.log('[BTN] toggleAudio');
+  try {
+    window._jitsiApi.isAudioMuted().then(function(muted) {
+      window._jitsiApi.executeCommand('toggleAudio');
+      _callMuted = !muted;
+      document.getElementById('call-mute-btn').style.background = _callMuted ? '#E74C3C' : 'rgba(255,255,255,0.18)';
+      document.getElementById('call-mute-btn').textContent = _callMuted ? '\uD83D\uDD07' : '\uD83C\uDF99';
+      console.log('[BTN] Audio muted:', _callMuted);
+    });
+  } catch(e) { console.error('[BTN] toggleAudio error:', e); }
 }
 function jitsiToggleVideo() {
-  if (!window._jitsiApi) return;
-  window._jitsiApi.executeCommand('toggleVideo');
-  const btn = document.getElementById('call-video-btn');
-  const isOff = btn.style.background.includes('E74C3C');
-  btn.style.background = isOff ? 'rgba(255,255,255,0.15)' : '#E74C3C';
-  btn.textContent = isOff ? '\uD83D\uDCF9' : '\uD83D\uDEAB';
+  if (!window._jitsiApi) { console.log('[BTN] No jitsiApi'); return; }
+  console.log('[BTN] toggleVideo');
+  try {
+    window._jitsiApi.isVideoMuted().then(function(muted) {
+      window._jitsiApi.executeCommand('toggleVideo');
+      const btn = document.getElementById('call-video-btn');
+      btn.style.background = muted ? 'rgba(255,255,255,0.18)' : '#E74C3C';
+      btn.textContent = muted ? '\uD83D\uDCF9' : '\uD83D\uDEAB';
+      console.log('[BTN] Video muted:', !muted);
+    });
+  } catch(e) { console.error('[BTN] toggleVideo error:', e); }
 }
 function jitsiSwitchCamera() {
-  if (!window._jitsiApi) return;
-  window._jitsiApi.executeCommand('toggleCamera');
+  if (!window._jitsiApi) { console.log('[BTN] No jitsiApi'); return; }
+  console.log('[BTN] toggleCamera');
+  try { window._jitsiApi.executeCommand('toggleCamera'); } catch(e) { console.error('[BTN] toggleCamera error:', e); }
 }
 // Compat ancien code
 function toggleMute() { jitsiToggleMute(); }
