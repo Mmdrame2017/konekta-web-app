@@ -1563,6 +1563,7 @@ function launchJitsiEmbed(roomName, callType, displayName) {
 function jitsiHangup() {
   stopRingtone();
   clearInterval(_callTimer); _callTimer = null;
+  if (_callStatusPoll) { clearInterval(_callStatusPoll); _callStatusPoll = null; }
   if (window._jitsiApi) { try { window._jitsiApi.executeCommand('hangup'); } catch(e) {} try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-container').innerHTML = '';
   document.getElementById('call-overlay').style.display = 'none';
@@ -1614,6 +1615,8 @@ async function answerCall(callId) {
       headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
       body: JSON.stringify({ status: 'answered' })
     });
+    // Polling pour détecter si l'autre raccroche
+    startCallStatusPoll();
   } catch(e) { console.error('answerCall:', e.message); }
 }
 
@@ -1740,6 +1743,28 @@ async function openCallRoom(callType) {
   // 3. Sonnerie sortante
   playRingtone('outgoing');
   setTimeout(stopRingtone, 8000);
+
+  // 4. Polling pour détecter si l'autre a raccroché (via Supabase)
+  startCallStatusPoll();
+}
+
+let _callStatusPoll = null;
+function startCallStatusPoll() {
+  if (_callStatusPoll) clearInterval(_callStatusPoll);
+  _callStatusPoll = setInterval(async () => {
+    if (!_currentCallId) { clearInterval(_callStatusPoll); _callStatusPoll = null; return; }
+    try {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_calls?id=eq.' + _currentCallId + '&select=status', {
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+      });
+      const rows = await r.json();
+      if (rows && rows.length > 0 && rows[0].status === 'ended') {
+        console.log('[CALL-STATUS] L\'autre a raccroché');
+        clearInterval(_callStatusPoll); _callStatusPoll = null;
+        jitsiHangup();
+      }
+    } catch(e) {}
+  }, 3000);
 }
 
 // --- Contrôles Jitsi via l'API ---
