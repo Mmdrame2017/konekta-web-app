@@ -2405,7 +2405,9 @@ function openChat(contact) {
         <div class="chat-header-status" id="chat-status">${contact.phone || ''}</div>
       </div>
       <div class="chat-header-actions">
-        ${contact.isGroup ? '<button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>' : '<button class="icon-btn" onclick="startCall(\'audio\')" title="Appel vocal">📞</button><button class="icon-btn" onclick="startCall(\'video\')" title="Appel vidéo">📹</button><button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
+        <button class="icon-btn" onclick="startCall('audio')" title="Appel vocal">📞</button>
+        <button class="icon-btn" onclick="startCall('video')" title="Appel vidéo">📹</button>
+        ${contact.isGroup ? '<button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>' : '<button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
       </div>
     </div>
     <div class="messages-area scrollbar-custom" id="messages-area"></div>
