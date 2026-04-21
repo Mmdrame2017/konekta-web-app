@@ -711,14 +711,16 @@
 
 <!-- Call Overlay (Jitsi IFrame API) -->
 <div id="call-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:10000;flex-direction:column">
-  <!-- Jitsi iframe se monte ici -->
   <div id="jitsi-container" style="flex:1;width:100%;min-height:0"></div>
-  <!-- Barre de contrôle flottante en bas -->
-  <div id="call-controls" style="position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:16px;padding:16px 0 calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,0.7));z-index:2">
-    <button onclick="jitsiToggleMute()" id="call-mute-btn" style="width:52px;height:52px;border-radius:50%;border:none;background:rgba(255,255,255,0.15);color:#fff;font-size:1.2rem;cursor:pointer;backdrop-filter:blur(8px)" title="Micro">🎤</button>
-    <button onclick="jitsiToggleVideo()" id="call-video-btn" style="width:52px;height:52px;border-radius:50%;border:none;background:rgba(255,255,255,0.15);color:#fff;font-size:1.2rem;cursor:pointer;backdrop-filter:blur(8px)" title="Caméra">📹</button>
-    <button onclick="jitsiHangup()" style="width:60px;height:60px;border-radius:50%;border:none;background:#E74C3C;color:#fff;font-size:1.4rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.5)" title="Raccrocher">📞</button>
+  <!-- Barre de contrôle Konekta (par-dessus l'iframe Jitsi) -->
+  <div id="call-controls" style="position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:14px;padding:14px 0 calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,0.85));z-index:10">
+    <button onclick="jitsiToggleMute()" id="call-mute-btn" style="width:50px;height:50px;border-radius:50%;border:none;background:rgba(255,255,255,0.18);color:#fff;font-size:1.2rem;cursor:pointer;backdrop-filter:blur(8px)" title="Micro">🎤</button>
+    <button onclick="jitsiToggleVideo()" id="call-video-btn" style="width:50px;height:50px;border-radius:50%;border:none;background:rgba(255,255,255,0.18);color:#fff;font-size:1.2rem;cursor:pointer;backdrop-filter:blur(8px)" title="Caméra">📹</button>
+    <button onclick="jitsiHangup()" style="width:58px;height:58px;border-radius:50%;border:none;background:#E74C3C;color:#fff;font-size:1.4rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.5)" title="Raccrocher">📞</button>
+    <button onclick="jitsiSwitchCamera()" id="call-switch-btn" style="width:50px;height:50px;border-radius:50%;border:none;background:rgba(255,255,255,0.18);color:#fff;font-size:1.2rem;cursor:pointer;backdrop-filter:blur(8px)" title="Changer caméra">🔄</button>
   </div>
+  <!-- Timer flottant en haut -->
+  <div id="call-timer-bar" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:6px 18px;border-radius:20px;font-family:monospace;font-size:1rem;z-index:10;backdrop-filter:blur(8px)">00:00</div>
 </div>
 
 <!-- Voice Record Indicator -->
@@ -1470,10 +1472,11 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   overlay.style.display = 'flex';
   _callMuted = false;
   _callSeconds = 0;
-  document.getElementById('call-mute-btn').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('call-mute-btn').style.background = 'rgba(255,255,255,0.18)';
   document.getElementById('call-mute-btn').textContent = '\uD83C\uDF99';
-  document.getElementById('call-video-btn').style.background = 'rgba(255,255,255,0.15)';
+  document.getElementById('call-video-btn').style.background = 'rgba(255,255,255,0.18)';
   document.getElementById('call-video-btn').textContent = '\uD83D\uDCF9';
+  document.getElementById('call-timer-bar').textContent = '00:00';
   try {
     window._jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
       roomName: roomName,
@@ -1485,13 +1488,16 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         startWithVideoMuted: callType === 'audio',
         disableDeepLinking: true,
         prejoinConfig: { enabled: false },
+        prejoinPageEnabled: false,
         toolbarButtons: [],
-        disableModeratorIndicator: true,
-        disableSelfView: false,
         hideConferenceSubject: true,
         hideConferenceTimer: true,
+        disableModeratorIndicator: true,
         notifications: [],
-        disableThirdPartyRequests: true
+        disableThirdPartyRequests: true,
+        disableInviteFunctions: true,
+        enableClosePage: false,
+        p2p: { enabled: true }
       },
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK: false,
@@ -1499,23 +1505,34 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         SHOW_BRAND_WATERMARK: false,
         SHOW_POWERED_BY: false,
         TOOLBAR_BUTTONS: [],
-        FILM_STRIP_MAX_HEIGHT: 0,
+        TOOLBAR_ALWAYS_VISIBLE: false,
+        FILM_STRIP_MAX_HEIGHT: 120,
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
         HIDE_INVITE_MORE_HEADER: true,
-        MOBILE_APP_PROMO: false
+        MOBILE_APP_PROMO: false,
+        DISABLE_FOCUS_INDICATOR: true,
+        DEFAULT_REMOTE_DISPLAY_NAME: 'Konekta',
+        GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false
       },
       userInfo: { displayName: displayName || 'User' }
     });
-    // Timer d'appel
-    _callTimer = setInterval(() => { _callSeconds++; }, 1000);
-    // Quand l'autre raccroche
+    // Timer d'appel visible
+    _callTimer = setInterval(() => {
+      _callSeconds++;
+      const m = Math.floor(_callSeconds / 60);
+      const s = _callSeconds % 60;
+      document.getElementById('call-timer-bar').textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+    // Auto-raccrochage quand l'autre quitte
     window._jitsiApi.addListener('participantLeft', () => {
-      window._jitsiApi.getNumberOfParticipants().then(n => { if (n <= 1) jitsiHangup(); });
+      if (!window._jitsiApi) return;
+      window._jitsiApi.getNumberOfParticipants().then(function(n) { if (n <= 1) jitsiHangup(); }).catch(function() {});
     });
     window._jitsiApi.addListener('readyToClose', () => { jitsiHangup(); });
+    window._jitsiApi.addListener('videoConferenceLeft', () => { jitsiHangup(); });
   } catch(e) {
     console.error('JitsiMeetExternalAPI error:', e);
-    container.innerHTML = '<div style="color:#fff;text-align:center;padding:40px">Erreur chargement appel. Veuillez r\u00E9essayer.</div>';
+    container.innerHTML = '<div style="color:#fff;text-align:center;padding:40px">Erreur chargement. <button onclick="jitsiHangup()" style="color:#fff;background:#E74C3C;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;margin-top:12px">Fermer</button></div>';
   }
 }
 
@@ -1702,6 +1719,13 @@ function jitsiToggleVideo() {
   const isOff = btn.style.background.includes('E74C3C');
   btn.style.background = isOff ? 'rgba(255,255,255,0.15)' : '#E74C3C';
   btn.textContent = isOff ? '\uD83D\uDCF9' : '\uD83D\uDEAB';
+}
+function jitsiSwitchCamera() {
+  if (!window._jitsiApi) return;
+  // L'API Jitsi IFrame ne supporte pas directement le switch camera
+  // On utilise toggleVideo off/on pour forcer un re-grab de la caméra
+  window._jitsiApi.executeCommand('toggleVideo');
+  setTimeout(() => { if (window._jitsiApi) window._jitsiApi.executeCommand('toggleVideo'); }, 500);
 }
 // Compat ancien code
 function toggleMute() { jitsiToggleMute(); }
