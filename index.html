@@ -1546,12 +1546,17 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       console.log('[JITSI] Participant rejoint:', p.id, p.displayName);
       window._jitsiApi.executeCommand('setLargeVideoParticipant', p.id);
     });
-    // Auto-hangup UNIQUEMENT quand l'utilisateur raccroche via Jitsi
+    // Quand l'utilisateur raccroche via le bouton Jitsi → toujours fermer
     window._jitsiApi.addListener('readyToClose', () => {
-      if (window._jitsiJoined) jitsiHangup();
+      console.log('[JITSI] readyToClose, joined:', window._jitsiJoined);
+      jitsiHangup();
     });
+    // videoConferenceLeft : uniquement si on a rejoint (évite le fire pendant init)
     window._jitsiApi.addListener('videoConferenceLeft', () => {
-      if (window._jitsiJoined) jitsiHangup();
+      if (window._jitsiJoined) {
+        console.log('[JITSI] videoConferenceLeft');
+        jitsiHangup();
+      }
     });
   } catch(e) {
     console.error('JitsiMeetExternalAPI error:', e);
@@ -1740,8 +1745,8 @@ async function openCallRoom(callType) {
   playRingtone('outgoing');
   setTimeout(stopRingtone, 8000);
 
-  // 4. Polling pour détecter si l'autre a raccroché (via Supabase)
-  startCallStatusPoll();
+  // 4. Polling pour détecter si l'autre a raccroché (délai pour éviter race condition)
+  setTimeout(() => startCallStatusPoll(), 5000);
 }
 
 let _callStatusPoll = null;
