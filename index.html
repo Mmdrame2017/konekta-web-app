@@ -1555,7 +1555,7 @@ function launchJitsiEmbed(roomName, callType, displayName) {
 function jitsiHangup() {
   stopRingtone();
   clearInterval(_callTimer); _callTimer = null;
-  if (window._jitsiApi) { try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
+  if (window._jitsiApi) { try { window._jitsiApi.executeCommand('hangup'); } catch(e) {} try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-container').innerHTML = '';
   document.getElementById('call-overlay').style.display = 'none';
   // Mettre à jour Supabase
@@ -1754,16 +1754,9 @@ function jitsiToggleVideo() {
   btn.style.background = isOff ? 'rgba(255,255,255,0.15)' : '#E74C3C';
   btn.textContent = isOff ? '\uD83D\uDCF9' : '\uD83D\uDEAB';
 }
-let _jitsiCamIndex = 0;
-async function jitsiSwitchCamera() {
+function jitsiSwitchCamera() {
   if (!window._jitsiApi) return;
-  try {
-    const devices = await window._jitsiApi.getAvailableDevices();
-    const cams = devices.videoInput || [];
-    if (cams.length < 2) return;
-    _jitsiCamIndex = (_jitsiCamIndex + 1) % cams.length;
-    window._jitsiApi.setVideoInputDevice(cams[_jitsiCamIndex].label, cams[_jitsiCamIndex].deviceId);
-  } catch(e) { console.error('switchCamera:', e); }
+  window._jitsiApi.executeCommand('toggleCamera');
 }
 // Compat ancien code
 function toggleMute() { jitsiToggleMute(); }
