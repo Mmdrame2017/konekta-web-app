@@ -1956,18 +1956,44 @@ function showIncomingCall(call) {
 
 async function openCallRoom(callType) {
   if (!currentChat) return;
-  const roomId = 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,40);
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
   const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json' };
+  const isGroup = currentChat.isGroup && _currentGroupId;
 
-  // 1. Enregistrer l'appel dans Supabase
-  console.log('[CALL-OUT] caller_id:', me.id, 'callee_id:', currentChat.userId, 'room:', roomId);
-  const callRes = await fetch(sbUrl + '/rest/v1/konekta_calls', {
-    method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
-    body: JSON.stringify({ caller_id: me.id, callee_id: currentChat.userId, caller_name: me.name || me.phone || '', call_type: callType, status: 'ringing', offer: { room: roomId } })
-  });
-  const callData = await callRes.json();
-  _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+  // Room ID unique
+  const roomId = isGroup
+    ? 'konekta-grp-' + _currentGroupId.slice(0,20)
+    : 'konekta-' + [me.id, currentChat.userId].sort().join('-').replace(/[^a-zA-Z0-9-]/g,'').slice(0,40);
+
+  if (isGroup) {
+    // Appel de groupe : notifier chaque membre
+    console.log('[CALL-OUT] Appel groupe:', _currentGroupId, 'room:', roomId);
+    try {
+      const mr = await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&select=user_id', { headers: sbH });
+      const members = await mr.json();
+      const callRows = (members || []).filter(m => m.user_id !== me.id).map(m => ({
+        caller_id: me.id, callee_id: m.user_id, caller_name: (currentChat.name || '') + ' (groupe)',
+        call_type: callType, status: 'ringing', offer: { room: roomId }
+      }));
+      if (callRows.length > 0) {
+        const callRes = await fetch(sbUrl + '/rest/v1/konekta_calls', {
+          method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
+          body: JSON.stringify(callRows)
+        });
+        const callData = await callRes.json();
+        _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+      }
+    } catch(e) { console.error('[CALL-OUT] Erreur groupe:', e); }
+  } else {
+    // Appel individuel
+    console.log('[CALL-OUT] caller_id:', me.id, 'callee_id:', currentChat.userId, 'room:', roomId);
+    const callRes = await fetch(sbUrl + '/rest/v1/konekta_calls', {
+      method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
+      body: JSON.stringify({ caller_id: me.id, callee_id: currentChat.userId, caller_name: me.name || me.phone || '', call_type: callType, status: 'ringing', offer: { room: roomId } })
+    });
+    const callData = await callRes.json();
+    _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+  }
 
   // 2. Lancer Jitsi embarqué dans l'overlay
   launchJitsiEmbed(roomId, callType, me.name || me.phone || 'User');
