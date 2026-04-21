@@ -510,7 +510,7 @@
           <span>🔍</span>
           <input type="text" id="market-search" placeholder="Rechercher un produit..." oninput="filterProducts()">
         </div>
-        <div id="market-categories" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none">
+        <div id="market-categories" style="display:flex;gap:8px;overflow-x:scroll;-webkit-overflow-scrolling:touch;padding-bottom:8px;flex-wrap:nowrap;scrollbar-width:thin">
           <button class="cat-btn active" onclick="filterByCategory('all',this)" style="background:var(--primary);color:#fff;border:none;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">Tout</button>
           <button class="cat-btn" onclick="filterByCategory('Électronique',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">📱 Électronique</button>
           <button class="cat-btn" onclick="filterByCategory('Véhicules',this)" style="background:var(--bg3);color:var(--text2);border:1px solid var(--border);padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit">🚗 Véhicules</button>
