@@ -1530,14 +1530,26 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       document.getElementById('call-timer-bar').textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }, 1000);
     // Log connexion
+    window._jitsiJoined = false;
     window._jitsiApi.addListener('videoConferenceJoined', () => {
       window._jitsiJoined = true;
       console.log('[JITSI] Conférence rejointe');
     });
-    // Seul auto-hangup : quand Jitsi lui-même veut fermer
+    // Auto-hangup quand Jitsi veut fermer
     window._jitsiApi.addListener('readyToClose', () => {
       if (window._jitsiJoined) jitsiHangup();
     });
+    // Détection quand l'autre quitte (après 10s de sécurité)
+    setTimeout(() => {
+      if (!window._jitsiApi) return;
+      window._jitsiApi.addListener('participantLeft', () => {
+        if (!window._jitsiApi || !window._jitsiJoined || _callSeconds < 5) return;
+        window._jitsiApi.getNumberOfParticipants().then(function(n) {
+          console.log('[JITSI] participantLeft, n=' + n);
+          if (n <= 1) jitsiHangup();
+        }).catch(function() {});
+      });
+    }, 10000);
   } catch(e) {
     console.error('JitsiMeetExternalAPI error:', e);
     container.innerHTML = '<div style="color:#fff;text-align:center;padding:40px">Erreur chargement. <button onclick="jitsiHangup()" style="color:#fff;background:#E74C3C;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;margin-top:12px">Fermer</button></div>';
@@ -1619,39 +1631,37 @@ function rejectCall(callId) {
 function startIncomingCallPoll() {
   if (_incomingCallPoll) return;
   console.log('[CALL-POLL] Démarré pour user:', me?.id, 'phone:', me?.phone);
-  // Debug visuel temporaire sur mobile
+  // Debug visuel sur mobile
   let dbg = document.getElementById('debug-call');
   if (!dbg) {
     dbg = document.createElement('div');
     dbg.id = 'debug-call';
-    dbg.style.cssText = 'position:fixed;bottom:70px;left:4px;right:4px;background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;padding:6px 8px;border-radius:6px;z-index:99999;font-family:monospace;max-height:100px;overflow-y:auto;display:none';
+    dbg.style.cssText = 'position:fixed;bottom:70px;left:4px;right:4px;background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;padding:6px 8px;border-radius:6px;z-index:99999;font-family:monospace;max-height:120px;overflow-y:auto';
     document.body.appendChild(dbg);
   }
-  function dbgLog(msg) { console.log(msg); dbg.style.display = 'block'; dbg.innerHTML = msg + '<br>' + dbg.innerHTML; if (dbg.children.length > 8) dbg.lastChild.remove(); }
-  dbgLog('POLL: me.id=' + (me?.id||'?').slice(0,8) + ' ph=' + (me?.phone||'?'));
+  function dbgLog(msg) { console.log(msg); if(dbg) { dbg.innerHTML = msg + '<br>' + dbg.innerHTML; if (dbg.children.length > 10) dbg.lastChild.remove(); } }
+  dbgLog('POLL: id=' + (me?.id||'?').slice(0,8) + ' _callId=' + (_currentCallId||'null'));
 
   _incomingCallPoll = setInterval(async () => {
     if (!me || !me.id) return;
     try {
       const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
-      const myId = me.id;
-      const myPhone = me.phone || '';
-      let url = sbUrl + '/rest/v1/konekta_calls?status=eq.ringing&order=created_at.desc&limit=1';
-      if (myPhone) {
-        url += '&or=(callee_id.eq.' + myId + ',callee_id.eq.' + myPhone + ')';
-      } else {
-        url += '&callee_id=eq.' + myId;
-      }
+      // Filtre simple par UUID uniquement (pas de OR)
+      const url = sbUrl + '/rest/v1/konekta_calls?callee_id=eq.' + me.id + '&status=eq.ringing&order=created_at.desc&limit=1';
       const r = await fetch(url, { headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey } });
       const rows = await r.json();
       if (rows && rows.length > 0) {
         const call = rows[0];
         const age = Date.now() - new Date(call.created_at).getTime();
-        dbgLog('FOUND: from=' + (call.caller_name||'?') + ' age=' + Math.round(age/1000) + 's callee=' + (call.callee_id||'?').slice(0,8));
-        if (age < 45000) showIncomingCall(call);
+        dbgLog('RING! from=' + (call.caller_name||'?') + ' age=' + Math.round(age/1000) + 's id=' + call.id.slice(0,8));
+        if (age < 60000 && !_currentCallId) {
+          showIncomingCall(call);
+        } else {
+          dbgLog('SKIP: age=' + Math.round(age/1000) + 's _callId=' + (_currentCallId||'null'));
+        }
       }
     } catch(e) { dbgLog('ERR: ' + e.message); }
-  }, 2000);
+  }, 2500);
 }
 
 let _incomingCallCheckTimer = null;
