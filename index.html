@@ -1535,11 +1535,19 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       const s = _callSeconds % 60;
       document.getElementById('call-timer-bar').textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }, 1000);
-    // Log connexion
+    // Log connexion + forcer la vue distante en principal
     window._jitsiJoined = false;
     window._jitsiApi.addListener('videoConferenceJoined', () => {
       window._jitsiJoined = true;
       console.log('[JITSI] Conférence rejointe');
+      // Forcer le filmstrip visible
+      window._jitsiApi.executeCommand('toggleFilmStrip');
+      setTimeout(() => { window._jitsiApi.executeCommand('toggleFilmStrip'); }, 500);
+    });
+    // Quand un participant rejoint, le mettre en vue principale
+    window._jitsiApi.addListener('participantJoined', (p) => {
+      console.log('[JITSI] Participant rejoint:', p.id, p.displayName);
+      window._jitsiApi.executeCommand('setLargeVideoParticipant', p.id);
     });
     // Auto-hangup quand Jitsi veut fermer
     window._jitsiApi.addListener('readyToClose', () => {
