@@ -1536,21 +1536,10 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       console.log('[JITSI] Participant rejoint:', p.id, p.displayName);
       window._jitsiApi.executeCommand('setLargeVideoParticipant', p.id);
     });
-    // Auto-hangup quand Jitsi veut fermer
+    // Auto-hangup quand Jitsi veut fermer (bouton raccrocher natif)
     window._jitsiApi.addListener('readyToClose', () => {
-      if (window._jitsiJoined) jitsiHangup();
+      jitsiHangup();
     });
-    // Détection quand l'autre quitte (après 10s de sécurité)
-    setTimeout(() => {
-      if (!window._jitsiApi) return;
-      window._jitsiApi.addListener('participantLeft', () => {
-        if (!window._jitsiApi || !window._jitsiJoined || _callSeconds < 5) return;
-        window._jitsiApi.getNumberOfParticipants().then(function(n) {
-          console.log('[JITSI] participantLeft, n=' + n);
-          if (n <= 1) jitsiHangup();
-        }).catch(function() {});
-      });
-    }, 10000);
   } catch(e) {
     console.error('JitsiMeetExternalAPI error:', e);
     container.innerHTML = '<div style="color:#fff;text-align:center;padding:40px">Erreur chargement. <button onclick="jitsiHangup()" style="color:#fff;background:#E74C3C;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;margin-top:12px">Fermer</button></div>';
