@@ -1502,7 +1502,10 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         disableThirdPartyRequests: true,
         disableInviteFunctions: true,
         enableClosePage: false,
-        filmstrip: { disableStageFilmstrip: false },
+        startWithTileView: false,
+        disableTileView: true,
+        filmstrip: { disableStageFilmstrip: true },
+        disableSelfView: false,
         p2p: { enabled: true }
       },
       interfaceConfigOverwrite: {
@@ -1512,15 +1515,15 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         SHOW_POWERED_BY: false,
         TOOLBAR_BUTTONS: [],
         TOOLBAR_ALWAYS_VISIBLE: false,
-        FILM_STRIP_MAX_HEIGHT: 150,
-        VERTICAL_FILMSTRIP: true,
+        FILM_STRIP_MAX_HEIGHT: 100,
+        VERTICAL_FILMSTRIP: false,
+        TILE_VIEW_MAX_COLUMNS: 1,
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
         HIDE_INVITE_MORE_HEADER: true,
         MOBILE_APP_PROMO: false,
         DISABLE_FOCUS_INDICATOR: true,
         DEFAULT_REMOTE_DISPLAY_NAME: 'Konekta',
-        GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false,
-        DISABLE_VIDEO_BACKGROUND: false
+        GENERATE_ROOMNAMES_ON_WELCOME_PAGE: false
       },
       userInfo: { displayName: displayName || 'User' }
     });
