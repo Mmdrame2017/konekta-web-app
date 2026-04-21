@@ -1831,22 +1831,62 @@ function cancelVoiceRecord() {
 
 function sendVoiceRecord() {
   if (!_mediaRecorder) return;
-  _mediaRecorder.onstop = () => {
+  const dur = _voiceSeconds;
+  _mediaRecorder.onstop = async () => {
     const blob = new Blob(_audioChunks, { type: 'audio/webm' });
-    // Envoyer comme message vocal (pour l'instant, simuler)
-    const duration = Math.floor(_voiceSeconds / 60) + ':' + (_voiceSeconds % 60 < 10 ? '0' : '') + (_voiceSeconds % 60);
-    if (currentChat) {
-      const chatInput = document.getElementById('chat-input');
-      if (chatInput) { chatInput.value = '🎤 Message vocal (' + duration + ')'; sendMessage(); }
-    }
     _mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    if (!currentChat) return;
+    // Convertir en base64
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result; // data:audio/webm;base64,...
+      const duration = Math.floor(dur / 60) + ':' + (dur % 60 < 10 ? '0' : '') + (dur % 60);
+      const chatId = getChatId(me.id, currentChat.userId);
+      const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+      try {
+        await fetch(sbUrl + '/rest/v1/konekta_messages', {
+          method: 'POST',
+          headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'audio', content: JSON.stringify({ audio: base64, duration: duration }) })
+        });
+        // Afficher localement
+        appendAudioMessage(me.id, base64, duration);
+      } catch(e) { console.error('sendVoice:', e); }
+    };
+    reader.readAsDataURL(blob);
   };
   _mediaRecorder.stop();
   _voiceRecording = false;
   clearInterval(_voiceTimer);
   document.getElementById('voice-recording').style.display = 'none';
   document.getElementById('voice-record-btn').style.background = '';
-  document.getElementById('voice-record-btn').textContent = '🎤';
+  document.getElementById('voice-record-btn').textContent = '\uD83C\uDF99';
+}
+
+function appendAudioMessage(senderId, audioData, duration) {
+  const area = document.getElementById('messages-area');
+  if (!area) return;
+  const isMine = senderId === me.id;
+  const div = document.createElement('div');
+  div.className = 'message ' + (isMine ? 'sent' : 'received');
+  div.innerHTML = '<div style="display:flex;align-items:center;gap:8px;min-width:180px"><button onclick="playAudioMsg(this)" style="width:32px;height:32px;border-radius:50%;border:none;background:' + (isMine ? 'rgba(255,255,255,0.2)' : 'var(--primary)') + ';color:#fff;font-size:14px;cursor:pointer;flex-shrink:0">\u25B6</button><div style="flex:1;height:4px;background:rgba(255,255,255,0.2);border-radius:2px"><div class="audio-progress" style="height:100%;width:0%;background:#fff;border-radius:2px;transition:width 0.1s"></div></div><span style="font-size:11px;opacity:0.7;flex-shrink:0">' + duration + '</span></div><audio src="' + audioData + '" preload="none"></audio>';
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function playAudioMsg(btn) {
+  const msgDiv = btn.closest('.message');
+  const audio = msgDiv.querySelector('audio');
+  const progress = msgDiv.querySelector('.audio-progress');
+  if (!audio) return;
+  if (!audio.paused) { audio.pause(); btn.textContent = '\u25B6'; return; }
+  // Arrêter les autres lecteurs
+  document.querySelectorAll('.message audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
+  document.querySelectorAll('.message button').forEach(b => { if (b !== btn && b.textContent === '\u23F8') b.textContent = '\u25B6'; });
+  btn.textContent = '\u23F8';
+  audio.play();
+  audio.ontimeupdate = () => { if (progress) progress.style.width = (audio.currentTime / audio.duration * 100) + '%'; };
+  audio.onended = () => { btn.textContent = '\u25B6'; if (progress) progress.style.width = '0%'; };
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2168,6 +2208,18 @@ function appendMessage(msg, isHistory=false) {
         <span class="pay-status ${status}">${status==='success'?'✓ Confirmé':'⏳ En attente'}</span>
       </div>
       <div class="msg-time" style="text-align:${isSent?'right':'left'}">${time}</div>
+    </div>`;
+  } else if (msg.type === 'audio') {
+    let audioData = '', duration = '0:00';
+    try { const p = JSON.parse(msg.content); audioData = p.audio; duration = p.duration || '0:00'; } catch(e) {}
+    html = `<div class="msg-bubble ${isSent?'sent':'recv'}" style="padding:8px 12px">
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px">
+        <button onclick="playAudioMsg(this)" style="width:30px;height:30px;border-radius:50%;border:none;background:${isSent?'rgba(255,255,255,0.2)':'var(--primary)'};color:#fff;font-size:13px;cursor:pointer;flex-shrink:0">\u25B6</button>
+        <div style="flex:1;height:3px;background:rgba(255,255,255,0.2);border-radius:2px"><div class="audio-progress" style="height:100%;width:0%;background:#fff;border-radius:2px;transition:width 0.1s"></div></div>
+        <span style="font-size:10px;opacity:0.7;flex-shrink:0">${duration}</span>
+      </div>
+      <audio src="${audioData}" preload="none"></audio>
+      <div class="msg-time">${time}</div>
     </div>`;
   } else {
     html = `<div class="msg-bubble ${isSent?'sent':'recv'}">
