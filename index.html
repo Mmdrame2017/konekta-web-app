@@ -1518,9 +1518,19 @@ async function loadGroupMembers() {
   const countEl = document.getElementById('group-member-count');
   const addBtn = document.getElementById('group-add-btn');
   try {
-    const r = await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&select=user_id,role,konekta_users(id,name,phone,avatar)', { headers: sbH });
+    const r = await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&select=user_id,role', { headers: sbH });
     const members = await r.json();
     if (!Array.isArray(members)) { list.innerHTML = '<div style="color:var(--text2);padding:8px">Erreur chargement</div>'; return; }
+    // Charger les infos utilisateurs séparément
+    const userIds = members.map(m => m.user_id).filter(Boolean);
+    let usersMap = {};
+    if (userIds.length > 0) {
+      const idsFilter = userIds.map(id => 'id.eq.' + id).join(',');
+      const ur = await fetch(sbUrl + '/rest/v1/konekta_users?or=(' + idsFilter + ')&select=id,name,phone,avatar', { headers: sbH });
+      const users = await ur.json();
+      if (Array.isArray(users)) users.forEach(u => { usersMap[u.id] = u; });
+    }
+    members.forEach(m => { m.konekta_users = usersMap[m.user_id] || {}; });
     countEl.textContent = '(' + members.length + ')';
     // Vérifier si je suis admin
     const isAdmin = members.some(m => m.user_id === me.id && m.role === 'admin');
