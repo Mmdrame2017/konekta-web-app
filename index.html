@@ -1617,11 +1617,21 @@ function rejectCall(callId) {
 function startIncomingCallPoll() {
   if (_incomingCallPoll) return;
   console.log('[CALL-POLL] Démarré pour user:', me?.id, 'phone:', me?.phone);
+  // Debug visuel temporaire sur mobile
+  let dbg = document.getElementById('debug-call');
+  if (!dbg) {
+    dbg = document.createElement('div');
+    dbg.id = 'debug-call';
+    dbg.style.cssText = 'position:fixed;bottom:70px;left:4px;right:4px;background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;padding:6px 8px;border-radius:6px;z-index:99999;font-family:monospace;max-height:100px;overflow-y:auto;display:none';
+    document.body.appendChild(dbg);
+  }
+  function dbgLog(msg) { console.log(msg); dbg.style.display = 'block'; dbg.innerHTML = msg + '<br>' + dbg.innerHTML; if (dbg.children.length > 8) dbg.lastChild.remove(); }
+  dbgLog('POLL: me.id=' + (me?.id||'?').slice(0,8) + ' ph=' + (me?.phone||'?'));
+
   _incomingCallPoll = setInterval(async () => {
     if (!me || !me.id) return;
     try {
       const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
-      // Chercher par ID ou par téléphone (au cas où callee_id = phone)
       const myId = me.id;
       const myPhone = me.phone || '';
       let url = sbUrl + '/rest/v1/konekta_calls?status=eq.ringing&order=created_at.desc&limit=1';
@@ -1635,10 +1645,10 @@ function startIncomingCallPoll() {
       if (rows && rows.length > 0) {
         const call = rows[0];
         const age = Date.now() - new Date(call.created_at).getTime();
-        console.log('[CALL-POLL] Appel trouvé:', call.id, 'age:', age + 'ms', 'from:', call.caller_name);
+        dbgLog('FOUND: from=' + (call.caller_name||'?') + ' age=' + Math.round(age/1000) + 's callee=' + (call.callee_id||'?').slice(0,8));
         if (age < 45000) showIncomingCall(call);
       }
-    } catch(e) { console.error('[CALL-POLL] Erreur:', e.message); }
+    } catch(e) { dbgLog('ERR: ' + e.message); }
   }, 2000);
 }
 
