@@ -1757,13 +1757,18 @@ async function openCallRoom(callType) {
 let _callStatusPoll = null;
 function startCallStatusPoll() {
   if (_callStatusPoll) clearInterval(_callStatusPoll);
+  const pollCallId = _currentCallId; // Capturer l'ID au démarrage
+  if (!pollCallId) return;
   _callStatusPoll = setInterval(async () => {
-    if (!_currentCallId) { clearInterval(_callStatusPoll); _callStatusPoll = null; return; }
+    // Ignorer si l'appel a changé (race condition)
+    if (_currentCallId !== pollCallId) { clearInterval(_callStatusPoll); _callStatusPoll = null; return; }
     try {
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_calls?id=eq.' + _currentCallId + '&select=status', {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_calls?id=eq.' + pollCallId + '&select=status', {
         headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
       });
       const rows = await r.json();
+      // Revérifier après le fetch (l'appel a pu changer pendant le fetch)
+      if (_currentCallId !== pollCallId) return;
       if (rows && rows.length > 0 && (rows[0].status === 'ended' || rows[0].status === 'rejected')) {
         console.log('[CALL-STATUS] L\'autre a raccroché/refusé:', rows[0].status);
         clearInterval(_callStatusPoll); _callStatusPoll = null;
