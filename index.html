@@ -1467,11 +1467,8 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   overlay.style.display = 'flex';
   _callMuted = false;
   _callSeconds = 0;
-  document.getElementById('call-mute-btn').style.background = 'rgba(255,255,255,0.18)';
-  document.getElementById('call-mute-btn').textContent = '\uD83C\uDF99';
-  document.getElementById('call-video-btn').style.background = 'rgba(255,255,255,0.18)';
-  document.getElementById('call-video-btn').textContent = '\uD83D\uDCF9';
-  document.getElementById('call-timer-bar').textContent = '00:00';
+  const timerBar = document.getElementById('call-timer-bar');
+  if (timerBar) timerBar.textContent = '00:00';
   try {
     const JAAS_APP_ID = 'vpaas-magic-cookie-ef45f60a15164dd4a20878febf691844';
     window._jitsiApi = new JitsiMeetExternalAPI('8x8.vc', {
@@ -1525,7 +1522,8 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       _callSeconds++;
       const m = Math.floor(_callSeconds / 60);
       const s = _callSeconds % 60;
-      document.getElementById('call-timer-bar').textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+      const tb = document.getElementById('call-timer-bar');
+      if (tb) tb.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }, 1000);
     // Log connexion + forcer la vue distante en principal
     window._jitsiJoined = false;
@@ -1767,38 +1765,11 @@ function startCallStatusPoll() {
   }, 3000);
 }
 
-// --- Contrôles Jitsi via l'API ---
-function jitsiToggleMute() {
-  if (!window._jitsiApi) { console.log('[BTN] No jitsiApi'); return; }
-  console.log('[BTN] toggleAudio');
-  try {
-    window._jitsiApi.isAudioMuted().then(function(muted) {
-      window._jitsiApi.executeCommand('toggleAudio');
-      _callMuted = !muted;
-      document.getElementById('call-mute-btn').style.background = _callMuted ? '#E74C3C' : 'rgba(255,255,255,0.18)';
-      document.getElementById('call-mute-btn').textContent = _callMuted ? '\uD83D\uDD07' : '\uD83C\uDF99';
-      console.log('[BTN] Audio muted:', _callMuted);
-    });
-  } catch(e) { console.error('[BTN] toggleAudio error:', e); }
-}
-function jitsiToggleVideo() {
-  if (!window._jitsiApi) { console.log('[BTN] No jitsiApi'); return; }
-  console.log('[BTN] toggleVideo');
-  try {
-    window._jitsiApi.isVideoMuted().then(function(muted) {
-      window._jitsiApi.executeCommand('toggleVideo');
-      const btn = document.getElementById('call-video-btn');
-      btn.style.background = muted ? 'rgba(255,255,255,0.18)' : '#E74C3C';
-      btn.textContent = muted ? '\uD83D\uDCF9' : '\uD83D\uDEAB';
-      console.log('[BTN] Video muted:', !muted);
-    });
-  } catch(e) { console.error('[BTN] toggleVideo error:', e); }
-}
-function jitsiSwitchCamera() {
-  if (!window._jitsiApi) { console.log('[BTN] No jitsiApi'); return; }
-  console.log('[BTN] toggleCamera');
-  try { window._jitsiApi.executeCommand('toggleCamera'); } catch(e) { console.error('[BTN] toggleCamera error:', e); }
-}
+// --- Contrôles Jitsi (boutons natifs dans l'iframe) ---
+// Les contrôles sont maintenant gérés par la toolbar Jitsi native
+function jitsiToggleMute() {} // noop - géré par Jitsi
+function jitsiToggleVideo() {} // noop - géré par Jitsi
+function jitsiSwitchCamera() {} // noop - géré par Jitsi
 // Compat ancien code
 function toggleMute() { jitsiToggleMute(); }
 function toggleVideo() { jitsiToggleVideo(); }
