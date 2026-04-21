@@ -1637,20 +1637,24 @@ function startIncomingCallPoll() {
 
   _incomingCallPoll = setInterval(async () => {
     if (!me || !me.id) return;
+    // Auto-reset si appel précédent mal nettoyé
+    if (_currentCallId && !window._jitsiApi) {
+      dbgLog('RESET _callId (no jitsi)');
+      _currentCallId = null;
+    }
     try {
       const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
-      // Filtre simple par UUID uniquement (pas de OR)
       const url = sbUrl + '/rest/v1/konekta_calls?callee_id=eq.' + me.id + '&status=eq.ringing&order=created_at.desc&limit=1';
       const r = await fetch(url, { headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey } });
       const rows = await r.json();
       if (rows && rows.length > 0) {
         const call = rows[0];
         const age = Date.now() - new Date(call.created_at).getTime();
-        dbgLog('RING! from=' + (call.caller_name||'?') + ' age=' + Math.round(age/1000) + 's id=' + call.id.slice(0,8));
+        dbgLog('RING! from=' + (call.caller_name||'?') + ' age=' + Math.round(age/1000) + 's');
         if (age < 60000 && !_currentCallId) {
           showIncomingCall(call);
-        } else {
-          dbgLog('SKIP: age=' + Math.round(age/1000) + 's _callId=' + (_currentCallId||'null'));
+        } else if (_currentCallId) {
+          dbgLog('SKIP: en appel');
         }
       }
     } catch(e) { dbgLog('ERR: ' + e.message); }
@@ -1660,7 +1664,8 @@ function startIncomingCallPoll() {
 let _incomingCallCheckTimer = null;
 
 function showIncomingCall(call) {
-  if (_currentCallId) return;
+  if (_currentCallId && window._jitsiApi) return; // Vraiment en appel
+  _currentCallId = null; // Reset si pas d'appel actif
   if (document.getElementById('incoming-call')?.dataset.callId === call.id) return;
   console.log('[INCOMING] Affichage notification pour', call.caller_name, call.id);
   playRingtone('incoming');
