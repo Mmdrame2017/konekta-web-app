@@ -1523,19 +1523,28 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       userInfo: { displayName: displayName || 'User' }
     });
     // Timer d'appel visible
+    window._jitsiJoined = false;
     _callTimer = setInterval(() => {
       _callSeconds++;
       const m = Math.floor(_callSeconds / 60);
       const s = _callSeconds % 60;
       document.getElementById('call-timer-bar').textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
     }, 1000);
-    // Auto-raccrochage quand l'autre quitte
+    // Marquer quand vraiment connecté à la conférence
+    window._jitsiApi.addListener('videoConferenceJoined', () => {
+      window._jitsiJoined = true;
+      console.log('[JITSI] Conférence rejointe');
+    });
+    // Auto-raccrochage UNIQUEMENT après avoir rejoint
     window._jitsiApi.addListener('participantLeft', () => {
-      if (!window._jitsiApi) return;
+      if (!window._jitsiApi || !window._jitsiJoined) return;
       window._jitsiApi.getNumberOfParticipants().then(function(n) { if (n <= 1) jitsiHangup(); }).catch(function() {});
     });
     window._jitsiApi.addListener('readyToClose', () => { jitsiHangup(); });
-    window._jitsiApi.addListener('videoConferenceLeft', () => { jitsiHangup(); });
+    window._jitsiApi.addListener('videoConferenceLeft', () => {
+      if (!window._jitsiJoined) return; // Ignorer si jamais vraiment connecté
+      jitsiHangup();
+    });
   } catch(e) {
     console.error('JitsiMeetExternalAPI error:', e);
     container.innerHTML = '<div style="color:#fff;text-align:center;padding:40px">Erreur chargement. <button onclick="jitsiHangup()" style="color:#fff;background:#E74C3C;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;margin-top:12px">Fermer</button></div>';
