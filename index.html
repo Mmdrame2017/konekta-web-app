@@ -1418,7 +1418,7 @@ async function loadChats() {
         const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
         const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
         const idsFilter = otherIds.map(id => 'id.eq.' + id).join(',');
-        const ur = await fetch(sbUrl + '/rest/v1/konekta_users?or=(' + idsFilter + ')&select=id,name,phone', { headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey } });
+        const ur = await fetch(sbUrl + '/rest/v1/konekta_users?or=(' + idsFilter + ')&select=id,name,phone,avatar', { headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey } });
         const users = await ur.json();
         if (Array.isArray(users)) users.forEach(u => { usersMap[u.id] = u; });
       } catch(e) {}
@@ -1431,8 +1431,9 @@ async function loadChats() {
       const other = usersMap[otherId] || {};
       const otherName = other.name || other.phone || (otherId||'').slice(0,12) || 'Contact';
       const preview = chat.type === 'payment' ? '💳 Paiement Wave' : (chat.content || '...');
-      return `<div class="chat-item" onclick="openChat({userId:'${otherId}',name:'${(otherName||'').replace(/'/g,'')}',phone:'${other.phone||''}'})" data-other="${otherId}">
-        <div class="chat-avatar">${(otherName||'?').charAt(0).toUpperCase()}</div>
+      const otherAvatar = other.avatar || '';
+      return `<div class="chat-item" onclick="openChat({userId:'${otherId}',name:'${(otherName||'').replace(/'/g,'')}',phone:'${other.phone||''}',avatar:'${(otherAvatar||'').replace(/'/g,'')}'})" data-other="${otherId}">
+        <div class="chat-avatar">${otherAvatar ? '<img src="'+otherAvatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (otherName||'?').charAt(0).toUpperCase()}</div>
         <div class="chat-item-info">
           <div class="chat-item-name">${otherName}</div>
           <div class="chat-item-last">${preview.substring(0,40)}</div>
@@ -2036,7 +2037,7 @@ async function autoCompleteContact() {
       const sbUrl = SUPA_FB_URL;
       const sbKey = SUPA_FB_KEY;
       // Chercher par nom OU téléphone (ilike pour partial match)
-      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(name.ilike.*' + encodeURIComponent(query) + '*,phone.ilike.*' + encodeURIComponent(query) + '*)&select=id,name,phone&limit=8', {
+      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(name.ilike.*' + encodeURIComponent(query) + '*,phone.ilike.*' + encodeURIComponent(query) + '*)&select=id,name,phone,avatar&limit=8', {
         headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
       });
       const users = await r.json();
@@ -2046,8 +2047,8 @@ async function autoCompleteContact() {
         return;
       }
       resultsDiv.innerHTML = users.filter(u => u.id !== me.id).map(u => `
-        <div onclick="selectAutoComplete('${u.id}','${(u.name||'').replace(/'/g,'')}','${u.phone||''}')" style="padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s">
-          <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0">${(u.name||u.phone||'?').charAt(0).toUpperCase()}</div>
+        <div onclick="selectAutoComplete('${u.id}','${(u.name||'').replace(/'/g,'')}','${u.phone||''}','${(u.avatar||'').replace(/'/g,'')}')" style="padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden">${u.avatar ? '<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (u.name||u.phone||'?').charAt(0).toUpperCase()}</div>
           <div><div style="font-size:13px;font-weight:600">${u.name || 'Sans nom'}</div><div style="font-size:11px;color:var(--text2)">${u.phone || ''}</div></div>
         </div>
       `).join('');
@@ -2056,10 +2057,10 @@ async function autoCompleteContact() {
   }, 300);
 }
 
-function selectAutoComplete(userId, name, phone) {
+function selectAutoComplete(userId, name, phone, avatar) {
   document.getElementById('autocomplete-results').style.display = 'none';
   document.getElementById('search-phone').value = '';
-  openChat({ userId, name: name || phone, phone });
+  openChat({ userId, name: name || phone, phone, avatar: avatar || '' });
 }
 
 async function quickSearchChat() {
@@ -2074,7 +2075,7 @@ async function quickSearchChat() {
     // Chercher par nom exact ou téléphone
     const variants = digits.length >= 7 ? [query, digits, '+221' + (digits.startsWith('221') ? digits.slice(3) : digits)] : [query];
     for (const q of variants) {
-      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(phone.eq.' + encodeURIComponent(q) + ',name.ilike.*' + encodeURIComponent(q) + '*)&select=id,name,phone&limit=1', {
+      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(phone.eq.' + encodeURIComponent(q) + ',name.ilike.*' + encodeURIComponent(q) + '*)&select=id,name,phone,avatar&limit=1', {
         headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
       });
       const rows = await r.json();
@@ -2115,7 +2116,7 @@ async function startChat() {
         const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
         const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
         for (const ph of variants) {
-          const r = await fetch(sbUrl + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=id,name,phone&limit=1', {
+          const r = await fetch(sbUrl + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=id,name,phone,avatar&limit=1', {
             headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
           });
           const rows = await r.json();
@@ -2201,7 +2202,7 @@ function openChat(contact) {
   view.innerHTML = `
     <div class="chat-header">
       <button class="icon-btn mobile-back-btn" onclick="closeMobileChat()" title="Retour" style="display:none;font-size:18px">←</button>
-      <div class="chat-avatar" style="width:38px;height:38px;font-size:15px">${(contact.name||'?').charAt(0).toUpperCase()}</div>
+      <div class="chat-avatar" style="width:38px;height:38px;font-size:15px;overflow:hidden">${contact.avatar ? '<img src="'+contact.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (contact.name||'?').charAt(0).toUpperCase()}</div>
       <div class="chat-header-info">
         <div class="chat-header-name">${contact.name || (contact.userId||'').slice(0,12) || 'Contact'}</div>
         <div class="chat-header-status" id="chat-status">${contact.phone || ''}</div>
