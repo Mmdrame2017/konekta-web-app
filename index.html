@@ -1504,8 +1504,8 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         enableClosePage: false,
         startWithTileView: false,
         disableTileView: true,
-        filmstrip: { disableStageFilmstrip: true },
-        disableSelfView: false,
+        filmstrip: { disableStageFilmstrip: true, disabled: true },
+        disableSelfViewSettings: true,
         p2p: { enabled: true }
       },
       interfaceConfigOverwrite: {
@@ -1515,7 +1515,7 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         SHOW_POWERED_BY: false,
         TOOLBAR_BUTTONS: [],
         TOOLBAR_ALWAYS_VISIBLE: false,
-        FILM_STRIP_MAX_HEIGHT: 100,
+        FILM_STRIP_MAX_HEIGHT: 0,
         VERTICAL_FILMSTRIP: false,
         TILE_VIEW_MAX_COLUMNS: 1,
         DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
@@ -1540,9 +1540,6 @@ function launchJitsiEmbed(roomName, callType, displayName) {
     window._jitsiApi.addListener('videoConferenceJoined', () => {
       window._jitsiJoined = true;
       console.log('[JITSI] Conférence rejointe');
-      // Forcer le filmstrip visible
-      window._jitsiApi.executeCommand('toggleFilmStrip');
-      setTimeout(() => { window._jitsiApi.executeCommand('toggleFilmStrip'); }, 500);
     });
     // Quand un participant rejoint, le mettre en vue principale
     window._jitsiApi.addListener('participantJoined', (p) => {
