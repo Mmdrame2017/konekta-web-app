@@ -1536,9 +1536,12 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       console.log('[JITSI] Participant rejoint:', p.id, p.displayName);
       window._jitsiApi.executeCommand('setLargeVideoParticipant', p.id);
     });
-    // Auto-hangup quand Jitsi veut fermer (bouton raccrocher natif)
+    // Auto-hangup UNIQUEMENT quand l'utilisateur raccroche via Jitsi
     window._jitsiApi.addListener('readyToClose', () => {
-      jitsiHangup();
+      if (window._jitsiJoined) jitsiHangup();
+    });
+    window._jitsiApi.addListener('videoConferenceLeft', () => {
+      if (window._jitsiJoined) jitsiHangup();
     });
   } catch(e) {
     console.error('JitsiMeetExternalAPI error:', e);
@@ -1750,8 +1753,8 @@ function startCallStatusPoll() {
         headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
       });
       const rows = await r.json();
-      if (rows && rows.length > 0 && rows[0].status === 'ended') {
-        console.log('[CALL-STATUS] L\'autre a raccroché');
+      if (rows && rows.length > 0 && (rows[0].status === 'ended' || rows[0].status === 'rejected')) {
+        console.log('[CALL-STATUS] L\'autre a raccroché/refusé:', rows[0].status);
         clearInterval(_callStatusPoll); _callStatusPoll = null;
         jitsiHangup();
       }
