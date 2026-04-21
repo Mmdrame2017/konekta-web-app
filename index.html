@@ -1478,8 +1478,9 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   document.getElementById('call-video-btn').textContent = '\uD83D\uDCF9';
   document.getElementById('call-timer-bar').textContent = '00:00';
   try {
-    window._jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
-      roomName: roomName,
+    const JAAS_APP_ID = 'vpaas-magic-cookie-ef45f60a15164dd4a20878febf691844';
+    window._jitsiApi = new JitsiMeetExternalAPI('8x8.vc', {
+      roomName: JAAS_APP_ID + '/' + roomName,
       parentNode: container,
       width: '100%',
       height: '100%',
