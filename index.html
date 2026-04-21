@@ -1412,27 +1412,28 @@ let _currentCallType = 'audio';
 let _incomingCallPoll = null;
 let _callSignalPoll = null;
 let _ringtoneAudio = null;
+let _ringtoneVibrate = null;
 
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:187.77.161.52:3478' },
-  { urls: 'turn:187.77.161.52:3478', username: 'konekta', credential: 'KonektaTURN2026!' },
-  { urls: 'turn:187.77.161.52:3478?transport=tcp', username: 'konekta', credential: 'KonektaTURN2026!' }
-];
-
-// Sonnerie générée par Web Audio API
+// Sonnerie : vibration mobile + son
 function playRingtone(type) {
   stopRingtone();
+  // Vibration mobile (fonctionne sans interaction utilisateur)
+  if (navigator.vibrate) {
+    navigator.vibrate([400, 200, 400, 1500]);
+    _ringtoneVibrate = setInterval(() => { try { navigator.vibrate([400, 200, 400, 1500]); } catch(e) {} }, 2500);
+  }
+  // Son AudioContext
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
     const gain = ctx.createGain();
-    gain.gain.value = 0.3;
+    gain.gain.value = 0.4;
     gain.connect(ctx.destination);
     let playing = true;
     function ring() {
       if (!playing) return;
       const osc = ctx.createOscillator();
-      osc.type = type === 'incoming' ? 'sine' : 'sine';
+      osc.type = 'sine';
       osc.frequency.value = type === 'incoming' ? 440 : 480;
       osc.connect(gain);
       osc.start();
@@ -1446,14 +1447,16 @@ function playRingtone(type) {
         osc2.start();
         osc2.stop(ctx.currentTime + 0.4);
       }, 500);
-      setTimeout(() => { if (playing) ring(); }, 2000);
+      setTimeout(() => { if (playing) ring(); }, 2500);
     }
     ring();
     _ringtoneAudio = { stop: () => { playing = false; ctx.close().catch(()=>{}); } };
-  } catch(e) {}
+  } catch(e) { console.log('[RING] AudioContext bloqué'); }
 }
 function stopRingtone() {
   if (_ringtoneAudio) { _ringtoneAudio.stop(); _ringtoneAudio = null; }
+  if (_ringtoneVibrate) { clearInterval(_ringtoneVibrate); _ringtoneVibrate = null; }
+  if (navigator.vibrate) navigator.vibrate(0);
 }
 
 // --- Appel sortant ---
@@ -1667,29 +1670,27 @@ function startIncomingCallPoll() {
 let _incomingCallCheckTimer = null;
 
 function showIncomingCall(call) {
-  // Ne pas montrer si déjà en appel ou déjà affiché pour cet appel
   if (_currentCallId) return;
   if (document.getElementById('incoming-call')?.dataset.callId === call.id) return;
+  console.log('[INCOMING] Affichage notification pour', call.caller_name, call.id);
   playRingtone('incoming');
   let inDiv = document.getElementById('incoming-call');
   if (!inDiv) {
     inDiv = document.createElement('div');
     inDiv.id = 'incoming-call';
-    inDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:linear-gradient(135deg,#0a2e1a,#11502c);padding:20px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 30px rgba(0,0,0,0.5);animation:slideDown 0.3s ease';
     document.body.appendChild(inDiv);
   }
+  inDiv.style.cssText = 'position:fixed;inset:0;z-index:20000;background:linear-gradient(180deg,#0a2e1a 0%,#000 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px';
   inDiv.dataset.callId = call.id;
-  const icon = call.call_type === 'video' ? '📹' : '📞';
-  inDiv.innerHTML = `
-    <div style="width:50px;height:50px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.3rem;color:#fff;font-weight:700;animation:pulse 1s infinite">${(call.caller_name||'?').charAt(0).toUpperCase()}</div>
-    <div style="flex:1">
-      <div style="font-weight:700;font-size:15px;color:#fff">${call.caller_name || 'Appelant'}</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.7)">${icon} Appel ${call.call_type === 'video' ? 'vidéo' : 'vocal'} entrant...</div>
-    </div>
-    <button onclick="answerCall('${call.id}')" style="width:50px;height:50px;border-radius:50%;background:#2ECC71;border:none;color:#fff;font-size:1.3rem;cursor:pointer;animation:pulse 1s infinite">📞</button>
-    <button onclick="rejectCall('${call.id}')" style="width:50px;height:50px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.3rem;cursor:pointer">✕</button>
-  `;
-  inDiv.style.display = 'flex';
+  const icon = call.call_type === 'video' ? '\uD83D\uDCF9' : '\uD83D\uDCDE';
+  const initial = (call.caller_name||'?').charAt(0).toUpperCase();
+  inDiv.innerHTML = '<div style="width:100px;height:100px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#fff;font-weight:700;box-shadow:0 0 40px rgba(142,168,50,0.4);animation:pulse 1.5s infinite">' + initial + '</div>'
+    + '<div style="font-size:1.5rem;font-weight:700;color:#fff">' + (call.caller_name || 'Appelant') + '</div>'
+    + '<div style="font-size:1rem;color:rgba(255,255,255,0.6)">' + icon + ' Appel ' + (call.call_type === 'video' ? 'vid\u00E9o' : 'vocal') + ' entrant...</div>'
+    + '<div style="display:flex;gap:40px;margin-top:40px">'
+    + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px"><button onclick="rejectCall(\'' + call.id + '\')" style="width:64px;height:64px;border-radius:50%;background:#E74C3C;border:none;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(231,76,60,0.5);touch-action:manipulation">\u2716</button><span style="color:rgba(255,255,255,0.6);font-size:12px">Refuser</span></div>'
+    + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px"><button onclick="answerCall(\'' + call.id + '\')" style="width:64px;height:64px;border-radius:50%;background:#2ECC71;border:none;color:#fff;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 20px rgba(46,204,113,0.5);animation:pulse 1.5s infinite;touch-action:manipulation">\uD83D\uDCDE</button><span style="color:rgba(255,255,255,0.6);font-size:12px">Accepter</span></div>'
+    + '</div>';
   // Poll pour détecter si l'appelant a raccroché
   if (_incomingCallCheckTimer) clearInterval(_incomingCallCheckTimer);
   _incomingCallCheckTimer = setInterval(async () => {
