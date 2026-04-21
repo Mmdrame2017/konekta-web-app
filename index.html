@@ -1536,14 +1536,12 @@ async function answerCall(callId) {
       const params = '#config.startWithAudioMuted=false&config.startWithVideoMuted=' + (call.call_type === 'audio') + '&config.disableDeepLinking=true&userInfo.displayName=' + encodeURIComponent(me.name || me.phone || 'User');
       window.open('https://meet.jit.si/' + call.offer.room + params, '_blank');
     }
-      // Marquer comme answered
-      await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
-        method: 'PATCH',
-        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ status: 'answered' })
-      });
-      return;
-    }
+    // Marquer comme answered
+    await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
+      method: 'PATCH',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'answered' })
+    });
   } catch(e) { console.error('answerCall:', e.message); }
 }
 
