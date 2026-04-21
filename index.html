@@ -1440,7 +1440,25 @@ async function loadChats() {
         </div>
       </div>`;
     }).join('');
+    // Charger les groupes
+    try {
+      const grpR = await fetch(SUPA_FB_URL + '/rest/v1/konekta_group_members?user_id=eq.' + myId + '&select=group_id,konekta_groups(id,name,avatar,description)', { headers: sbH });
+      const grpRows = await grpR.json();
+      if (Array.isArray(grpRows)) {
+        const groupsHtml = grpRows.filter(g => g.konekta_groups).map(g => {
+          const grp = g.konekta_groups;
+          return '<div class="chat-item" onclick="openGroupChat(\'' + grp.id + '\',\'' + (grp.name||'').replace(/'/g,'') + '\',\'' + (grp.avatar||'👥') + '\')" data-other="grp-' + grp.id + '">'
+            + '<div class="chat-avatar">' + (grp.avatar || '👥') + '</div>'
+            + '<div class="chat-item-info"><div class="chat-item-name">' + (grp.name || 'Groupe') + '</div><div class="chat-item-last">Groupe</div></div></div>';
+        }).join('');
+        el.innerHTML = el.innerHTML + groupsHtml;
+      }
+    } catch(ge) { console.error('loadGroups:', ge.message); }
   } catch(e) { console.error('loadChats:', e.message); }
+}
+
+function openGroupChat(groupId, name, avatar) {
+  openChat({ userId: 'group_' + groupId, name: name, phone: 'Groupe', avatar: '' });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2002,18 +2020,40 @@ async function createGroup() {
   const btn = document.getElementById('create-group-btn');
   btn.disabled = true; btn.textContent = 'Création...';
   try {
-    // Créer le groupe via l'API (si backend disponible)
-    await apiFetch('/messages/group', 'POST', {
-      name, description: desc,
-      members: members.split(',').map(m => m.trim()).filter(Boolean)
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json' };
+    const emoji = document.getElementById('group-emoji').value.trim() || '👥';
+    // 1. Créer le groupe
+    const grpRes = await fetch(sbUrl + '/rest/v1/konekta_groups', {
+      method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
+      body: JSON.stringify({ name, description: desc || null, avatar: emoji, created_by: me.id })
+    });
+    const grpData = await grpRes.json();
+    const groupId = Array.isArray(grpData) ? grpData[0].id : grpData.id;
+    // 2. Ajouter le créateur comme admin
+    const membersList = [{ group_id: groupId, user_id: me.id, role: 'admin' }];
+    // 3. Résoudre les membres par numéro de téléphone
+    const phones = members.split(',').map(m => m.replace(/\s/g, '')).filter(Boolean);
+    for (const ph of phones) {
+      const digits = ph.replace(/\D/g, '');
+      const last9 = digits.slice(-9);
+      try {
+        const r = await fetch(sbUrl + '/rest/v1/konekta_users?phone=like.*' + last9 + '&select=id&limit=1', { headers: sbH });
+        const rows = await r.json();
+        if (Array.isArray(rows) && rows.length > 0 && rows[0].id !== me.id) {
+          membersList.push({ group_id: groupId, user_id: rows[0].id, role: 'member' });
+        }
+      } catch(e2) {}
+    }
+    // 4. Insérer les membres
+    await fetch(sbUrl + '/rest/v1/konekta_group_members', {
+      method: 'POST', headers: { ...sbH, Prefer: 'return=minimal' },
+      body: JSON.stringify(membersList)
     });
     closeModal('modal-new-group');
     loadChats();
-    showMsg('', 'Groupe "' + name + '" créé !', 'success');
   } catch(e) {
-    // Fallback : créer localement
-    showMsg('group-msg', 'Groupe créé localement (backend indisponible)', 'info');
-    closeModal('modal-new-group');
+    showMsg('group-msg', 'Erreur: ' + e.message, 'error');
   }
   btn.disabled = false; btn.textContent = 'Créer le groupe';
 }
