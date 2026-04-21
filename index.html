@@ -1561,7 +1561,6 @@ function launchJitsiEmbed(roomName, callType, displayName) {
 
 // --- Raccrocher (Jitsi) ---
 function jitsiHangup() {
-  console.log('[HANGUP] Appelé par:', new Error().stack.split('\n')[2]?.trim());
   stopRingtone();
   clearInterval(_callTimer); _callTimer = null;
   if (_callStatusPoll) { clearInterval(_callStatusPoll); _callStatusPoll = null; }
@@ -1638,16 +1637,7 @@ function rejectCall(callId) {
 function startIncomingCallPoll() {
   if (_incomingCallPoll) return;
   console.log('[CALL-POLL] Démarré pour user:', me?.id, 'phone:', me?.phone);
-  // Debug visuel sur mobile
-  let dbg = document.getElementById('debug-call');
-  if (!dbg) {
-    dbg = document.createElement('div');
-    dbg.id = 'debug-call';
-    dbg.style.cssText = 'position:fixed;bottom:70px;left:4px;right:4px;background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;padding:6px 8px;border-radius:6px;z-index:99999;font-family:monospace;max-height:120px;overflow-y:auto';
-    document.body.appendChild(dbg);
-  }
-  function dbgLog(msg) { console.log(msg); if(dbg) { dbg.innerHTML = msg + '<br>' + dbg.innerHTML; if (dbg.children.length > 10) dbg.lastChild.remove(); } }
-  dbgLog('POLL: id=' + (me?.id||'?').slice(0,8) + ' _callId=' + (_currentCallId||'null'));
+  function dbgLog(msg) { console.log('[CALL-POLL]', msg); }
 
   _incomingCallPoll = setInterval(async () => {
     if (!me || !me.id) return;
