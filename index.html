@@ -2994,31 +2994,33 @@ function openEditProductModal(productId) {
 
 async function saveProduct() {
   if (!_editProductId) return;
+  const p = (window._products || []).find(x => x.id === _editProductId);
+  const isRental = p && p.listing_type === 'rental';
   const name  = document.getElementById('edit-prod-name').value.trim();
   const desc  = document.getElementById('edit-prod-desc').value.trim();
   const price = document.getElementById('edit-prod-price').value;
-  if (!name || !price) { showMsg('edit-prod-msg', 'Nom et prix requis', 'error'); return; }
+  if (!name) { showMsg('edit-prod-msg', 'Nom requis', 'error'); return; }
+  if (!isRental && !price) { showMsg('edit-prod-msg', 'Prix requis', 'error'); return; }
   const btn = document.getElementById('save-prod-btn');
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Sauvegarde...';
   try {
-    let image = undefined;
+    const body = { name, description: desc };
+    if (isRental) {
+      body.price_per_day = price ? parseInt(price) : null;
+      body.price_per_month = price ? parseInt(price) : (p.price_per_month || null);
+      body.price = parseInt(price) || p.price;
+    } else {
+      body.price = parseInt(price);
+    }
     if (_editPhotoBase64) {
-      btn.innerHTML = '<span class="loading"></span> Upload photo...';
-      const up = await apiFetch('/products/upload-image', 'POST', {
-        base64: _editPhotoBase64, mimeType: _editPhotoMime, filename: 'product'
-      });
-      image = up.url;
+      // Upload photo fallback Supabase storage
+      body.image = 'data:' + (_editPhotoMime || 'image/jpeg') + ';base64,' + _editPhotoBase64;
     }
-    const body = { name, description: desc, price: parseInt(price) };
-    if (image) body.image = image;
-    try { await apiFetch(`/products/${_editProductId}`, 'PUT', body); }
-    catch(apiErr) {
-      await fetch(SUPA_FB_URL + '/rest/v1/konekta_products?id=eq.' + _editProductId, {
-        method: 'PATCH',
-        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify(body)
-      });
-    }
+    await fetch(SUPA_FB_URL + '/rest/v1/konekta_products?id=eq.' + _editProductId, {
+      method: 'PATCH',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(body)
+    });
     closeModal('modal-edit-product');
     loadProducts();
   } catch(e) { showMsg('edit-prod-msg', e.message, 'error'); }
