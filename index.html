@@ -936,7 +936,7 @@
 <div class="modal-overlay" id="modal-buy-product">
   <div class="modal">
     <div class="modal-header">
-      <h3>🛒 Acheter ce produit</h3>
+      <h3 id="buy-modal-title">🛒 Acheter ce produit</h3>
       <button class="close-btn" onclick="closeModal('modal-buy-product')">✕</button>
     </div>
     <div style="background:var(--bg3);border-radius:var(--radius);padding:16px;margin-bottom:16px">
@@ -944,7 +944,8 @@
       <div style="font-size:16px;font-weight:700;text-align:center" id="buy-prod-name"></div>
       <div style="font-size:13px;color:var(--text2);text-align:center;margin-top:4px" id="buy-prod-desc"></div>
       <div style="font-size:24px;font-weight:800;color:var(--wave);text-align:center;margin-top:8px" id="buy-prod-price"></div>
-      <div style="font-size:12px;color:var(--text2);text-align:center;margin-top:4px">Vendeur : <span id="buy-prod-seller"></span></div>
+      <div style="font-size:13px;color:var(--text2);text-align:center;margin-top:4px" id="buy-prod-details"></div>
+      <div style="font-size:12px;color:var(--text2);text-align:center;margin-top:4px" id="buy-prod-seller-line">Vendeur : <span id="buy-prod-seller"></span></div>
     </div>
     <a id="buy-checkout-link" class="checkout-link" href="#" target="_blank" style="display:none">🔗 Ouvrir Wave pour payer</a>
     <div class="modal-footer">
@@ -3030,19 +3031,50 @@ function openBuyModal(productId) {
   } else {
     buyEmojiEl.textContent = p.image || '📦';
   }
+  const isRental = p.listing_type === 'rental';
+  document.getElementById('buy-modal-title').textContent = isRental ? '🔑 Louer ce bien' : '🛒 Acheter ce produit';
   document.getElementById('buy-prod-name').textContent = p.name;
   document.getElementById('buy-prod-desc').textContent = p.description || '';
-  document.getElementById('buy-prod-price').textContent = p.price.toLocaleString() + ' FCFA';
-  document.getElementById('buy-prod-seller').textContent = p.seller?.name || p.seller?.phone || '—';
+  // Prix adapté
+  if (isRental) {
+    const priceParts = [];
+    if (p.price_per_day) priceParts.push(p.price_per_day.toLocaleString() + ' F/jour');
+    if (p.price_per_month) priceParts.push(p.price_per_month.toLocaleString() + ' F/mois');
+    document.getElementById('buy-prod-price').textContent = priceParts.join(' · ') || p.price.toLocaleString() + ' FCFA';
+    let details = [];
+    if (p.deposit) details.push('Caution : ' + p.deposit.toLocaleString() + ' FCFA');
+    if (p.location) details.push('📍 ' + p.location);
+    document.getElementById('buy-prod-details').textContent = details.join(' · ');
+    document.getElementById('buy-prod-details').style.display = details.length ? '' : 'none';
+  } else {
+    document.getElementById('buy-prod-price').textContent = p.price.toLocaleString() + ' FCFA';
+    document.getElementById('buy-prod-details').style.display = 'none';
+  }
+  document.getElementById('buy-prod-seller-line').innerHTML = (isRental ? 'Propriétaire : ' : 'Vendeur : ') + '<span id="buy-prod-seller">' + escHtml(p.seller?.name || p.seller?.phone || '—') + '</span>';
   document.getElementById('buy-checkout-link').style.display = 'none';
   document.getElementById('buy-prod-btn').style.display = 'block';
   document.getElementById('buy-prod-btn').disabled = false;
-  document.getElementById('buy-prod-btn').textContent = '💳 Payer via Wave';
+  document.getElementById('buy-prod-btn').textContent = isRental ? '📞 Contacter le propriétaire' : '💳 Payer via Wave';
   openModal('modal-buy-product');
 }
 
 async function buyProduct() {
   if (!buyTargetProduct) return;
+  // Location : contacter le propriétaire via chat
+  if (buyTargetProduct.listing_type === 'rental') {
+    const sellerId = buyTargetProduct.seller_id;
+    const sellerName = buyTargetProduct.seller?.name || buyTargetProduct.seller?.phone || 'Propriétaire';
+    closeModal('modal-buy-product');
+    switchTab('chat');
+    setTimeout(() => {
+      openChat({ userId: sellerId, name: sellerName, phone: buyTargetProduct.seller?.phone || '' });
+      setTimeout(() => {
+        const input = document.getElementById('chat-input');
+        if (input) { input.value = 'Bonjour, je suis intéressé(e) par votre annonce "' + buyTargetProduct.name + '"'; input.focus(); }
+      }, 500);
+    }, 300);
+    return;
+  }
   const btn = document.getElementById('buy-prod-btn');
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
   try {
