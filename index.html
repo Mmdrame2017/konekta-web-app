@@ -2798,8 +2798,8 @@ async function loadProducts() {
           <div class="product-desc">${escHtml(p.description || '')}</div>
           <div class="product-footer">
             <div>
-              <div class="product-price">${p.listing_type === 'rental' ? (p.price_per_day || p.price || 0).toLocaleString() + ' F/jour' : p.price.toLocaleString() + ' F'}</div>
-              ${p.listing_type === 'rental' && p.price_per_month ? '<div style="font-size:11px;color:var(--text2)">' + p.price_per_month.toLocaleString() + ' F/mois</div>' : ''}
+              <div class="product-price">${p.listing_type === 'rental' ? (p.price_per_day ? p.price_per_day.toLocaleString() + ' F/jour' : p.price_per_month ? p.price_per_month.toLocaleString() + ' F/mois' : p.price.toLocaleString() + ' F') : p.price.toLocaleString() + ' F'}</div>
+              ${p.listing_type === 'rental' && p.price_per_day && p.price_per_month ? '<div style="font-size:11px;color:var(--text2)">' + p.price_per_month.toLocaleString() + ' F/mois</div>' : ''}
               ${p.listing_type === 'rental' && p.deposit ? '<div style="font-size:10px;color:var(--warning)">Caution: ' + p.deposit.toLocaleString() + ' F</div>' : ''}
               ${p.location ? '<div style="font-size:10px;color:var(--text2)">📍 ' + escHtml(p.location) + '</div>' : ''}
               <div class="product-seller">${escHtml(sellerName)}</div>
