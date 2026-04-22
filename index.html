@@ -789,7 +789,7 @@
     <!-- Champs Location (cachés par défaut) -->
     <div id="prod-rental-fields" style="display:none">
       <div class="form-group">
-        <label>Prix par jour (FCFA) *</label>
+        <label>Prix par jour (FCFA)</label>
         <input type="number" id="prod-price-day" placeholder="Ex: 25000" min="100">
       </div>
       <div class="form-group">
@@ -2871,7 +2871,7 @@ async function addProduct() {
   const locationText = document.getElementById('prod-location')?.value?.trim() || '';
   if (!name) { showMsg('prod-msg', 'Nom requis', 'error'); return; }
   if (!isRental && !price) { showMsg('prod-msg', 'Prix requis', 'error'); return; }
-  if (isRental && !priceDay) { showMsg('prod-msg', 'Prix par jour requis', 'error'); return; }
+  if (isRental && !priceDay && !priceMonth) { showMsg('prod-msg', 'Prix par jour ou par mois requis', 'error'); return; }
   if (!category) { showMsg('prod-msg', 'Veuillez choisir une catégorie', 'error'); return; }
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Publication...';
   try {
@@ -2924,8 +2924,8 @@ async function addProduct() {
         body: JSON.stringify({
           name, description, image, category, seller_id: sellerId, available: true,
           listing_type: isRental ? 'rental' : 'sale',
-          price: isRental ? parseInt(priceDay) : parseInt(price),
-          price_per_day: isRental ? parseInt(priceDay) : null,
+          price: isRental ? parseInt(priceDay || priceMonth || 0) : parseInt(price),
+          price_per_day: isRental && priceDay ? parseInt(priceDay) : null,
           price_per_month: priceMonth ? parseInt(priceMonth) : null,
           deposit: deposit ? parseInt(deposit) : null,
           location: locationText || null
