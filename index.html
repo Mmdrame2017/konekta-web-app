@@ -801,6 +801,14 @@
         <input type="number" id="prod-deposit" placeholder="Ex: 100000" min="0">
       </div>
       <div class="form-group">
+        <label>Type d'annonceur</label>
+        <select id="prod-owner-type" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+          <option value="particulier">👤 Particulier</option>
+          <option value="agence">🏢 Agence immobilière</option>
+          <option value="entreprise">🏗️ Entreprise</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label>Localisation</label>
         <input type="text" id="prod-location" placeholder="Ex: Dakar, Plateau">
       </div>
@@ -2797,6 +2805,7 @@ async function loadProducts() {
               ${p.listing_type === 'rental' && p.price_per_day && p.price_per_month ? '<div style="font-size:11px;color:var(--text2)">' + p.price_per_month.toLocaleString() + ' F/mois</div>' : ''}
               ${p.listing_type === 'rental' && p.deposit ? '<div style="font-size:10px;color:var(--warning)">Caution: ' + p.deposit.toLocaleString() + ' F</div>' : ''}
               ${p.location ? '<div style="font-size:10px;color:var(--text2)">📍 ' + escHtml(p.location) + '</div>' : ''}
+              ${p.owner_type === 'agence' ? '<div style="font-size:9px;background:rgba(83,189,235,0.15);color:var(--wave);padding:1px 6px;border-radius:8px;display:inline-block;margin-top:2px">🏢 Agence</div>' : p.owner_type === 'entreprise' ? '<div style="font-size:9px;background:rgba(0,168,132,0.15);color:var(--primary);padding:1px 6px;border-radius:8px;display:inline-block;margin-top:2px">🏗️ Entreprise</div>' : ''}
               <div class="product-seller">${escHtml(sellerName)}</div>
             </div>
             ${actionBtn}
@@ -2923,7 +2932,8 @@ async function addProduct() {
           price_per_day: isRental && priceDay ? parseInt(priceDay) : null,
           price_per_month: priceMonth ? parseInt(priceMonth) : null,
           deposit: deposit ? parseInt(deposit) : null,
-          location: locationText || null
+          location: locationText || null,
+          owner_type: isRental ? (document.getElementById('prod-owner-type')?.value || 'particulier') : null
         })
       });
       if (!res.ok) throw new Error('Erreur publication: ' + await res.text());
@@ -3050,11 +3060,13 @@ function openBuyModal(productId) {
     document.getElementById('buy-prod-price').textContent = p.price.toLocaleString() + ' FCFA';
     document.getElementById('buy-prod-details').style.display = 'none';
   }
-  document.getElementById('buy-prod-seller-line').innerHTML = (isRental ? 'Propriétaire : ' : 'Vendeur : ') + '<span id="buy-prod-seller">' + escHtml(p.seller?.name || p.seller?.phone || '—') + '</span>';
+  const ownerLabel = isRental ? (p.owner_type === 'agence' ? 'Agence' : p.owner_type === 'entreprise' ? 'Entreprise' : 'Propriétaire') : 'Vendeur';
+  const contactLabel = isRental ? (p.owner_type === 'agence' ? '🏢 Contacter l\'agence' : p.owner_type === 'entreprise' ? '🏗️ Contacter l\'entreprise' : '📞 Contacter le propriétaire') : '💳 Payer via Wave';
+  document.getElementById('buy-prod-seller-line').innerHTML = ownerLabel + ' : <span id="buy-prod-seller">' + escHtml(p.seller?.name || p.seller?.phone || '—') + '</span>';
   document.getElementById('buy-checkout-link').style.display = 'none';
   document.getElementById('buy-prod-btn').style.display = 'block';
   document.getElementById('buy-prod-btn').disabled = false;
-  document.getElementById('buy-prod-btn').textContent = isRental ? '📞 Contacter le propriétaire' : '💳 Payer via Wave';
+  document.getElementById('buy-prod-btn').textContent = contactLabel;
   openModal('modal-buy-product');
 }
 
