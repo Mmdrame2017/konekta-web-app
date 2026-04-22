@@ -974,9 +974,10 @@
       <div style="font-size:12px;color:var(--text2);text-align:center;margin-top:4px" id="buy-prod-seller-line">Vendeur : <span id="buy-prod-seller"></span></div>
     </div>
     <a id="buy-checkout-link" class="checkout-link" href="#" target="_blank" style="display:none">🔗 Ouvrir Wave pour payer</a>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-buy-product')">Annuler</button>
+    <div class="modal-footer" style="flex-direction:column;gap:8px">
       <button class="btn btn-primary" onclick="buyProduct()" id="buy-prod-btn">💳 Payer via Wave</button>
+      <button class="btn btn-secondary" onclick="contactSeller()" id="contact-seller-btn" style="border-color:var(--primary);color:var(--primary)">💬 Contacter le vendeur</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-buy-product')" style="font-size:13px">Annuler</button>
     </div>
   </div>
 </div>
@@ -3116,8 +3117,27 @@ function openBuyModal(productId) {
   document.getElementById('buy-checkout-link').style.display = 'none';
   document.getElementById('buy-prod-btn').style.display = 'block';
   document.getElementById('buy-prod-btn').disabled = false;
-  document.getElementById('buy-prod-btn').textContent = contactLabel;
+  document.getElementById('buy-prod-btn').textContent = isRental ? contactLabel : '💳 Payer via Wave';
+  document.getElementById('buy-prod-btn').style.display = isRental ? 'none' : 'block';
+  const contactBtn = document.getElementById('contact-seller-btn');
+  contactBtn.style.display = 'block';
+  contactBtn.textContent = isRental ? contactLabel : '💬 Contacter le vendeur';
   openModal('modal-buy-product');
+}
+
+function contactSeller() {
+  if (!buyTargetProduct) return;
+  const sellerId = buyTargetProduct.seller_id;
+  const sellerName = buyTargetProduct.seller?.name || buyTargetProduct.seller?.phone || 'Vendeur';
+  closeModal('modal-buy-product');
+  switchTab('chat');
+  setTimeout(() => {
+    openChat({ userId: sellerId, name: sellerName, phone: buyTargetProduct.seller?.phone || '' });
+    setTimeout(() => {
+      const input = document.getElementById('chat-input');
+      if (input) { input.value = 'Bonjour, je suis intéressé(e) par "' + buyTargetProduct.name + '" à ' + (buyTargetProduct.price || 0).toLocaleString() + ' FCFA'; input.focus(); }
+    }, 500);
+  }, 300);
 }
 
 async function buyProduct() {
