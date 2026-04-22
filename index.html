@@ -2760,19 +2760,13 @@ function filterByCategory(cat, btn) {
 
 async function loadProducts() {
   try {
-    let data;
-    try {
-      data = await apiFetch('/products');
-    } catch(apiErr) {
-      // Fallback Supabase direct si backend indisponible
-      const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
-      const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
-      const listingFilter = _marketMode === 'rental' ? '&or=(listing_type.eq.rental,listing_type.is.null)' : '&or=(listing_type.eq.sale,listing_type.is.null)';
-      const r = await fetch(sbUrl + '/rest/v1/konekta_products?available=eq.true&order=created_at.desc' + (_marketMode === 'rental' ? '&listing_type=eq.rental' : '&or=(listing_type.eq.sale,listing_type.is.null)') + '&select=*,seller:konekta_users!seller_id(id,name,phone)', {
-        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
-      });
-      data = await r.json();
-    }
+    const sbUrl = SUPA_FB_URL;
+    const sbKey = SUPA_FB_KEY;
+    const listingFilter = _marketMode === 'rental' ? '&listing_type=eq.rental' : '&or=(listing_type.eq.sale,listing_type.is.null)';
+    const r = await fetch(sbUrl + '/rest/v1/konekta_products?available=eq.true&order=created_at.desc' + listingFilter + '&select=*,seller:konekta_users!seller_id(id,name,phone)', {
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+    });
+    const data = await r.json();
     const grid = document.getElementById('products-grid');
     if (!data || !data.length) {
       grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="icon">🛒</div><p>Aucun produit disponible</p><p style="font-size:12px;margin-top:4px">Soyez le premier à vendre !</p></div>';
