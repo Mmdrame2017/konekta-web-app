@@ -3011,7 +3011,14 @@ async function saveProduct() {
     }
     const body = { name, description: desc, price: parseInt(price) };
     if (image) body.image = image;
-    await apiFetch(`/products/${_editProductId}`, 'PUT', body);
+    try { await apiFetch(`/products/${_editProductId}`, 'PUT', body); }
+    catch(apiErr) {
+      await fetch(SUPA_FB_URL + '/rest/v1/konekta_products?id=eq.' + _editProductId, {
+        method: 'PATCH',
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(body)
+      });
+    }
     closeModal('modal-edit-product');
     loadProducts();
   } catch(e) { showMsg('edit-prod-msg', e.message, 'error'); }
@@ -3022,7 +3029,13 @@ async function deleteProduct() {
   if (!_editProductId) return;
   if (!confirm('Supprimer ce produit ?')) return;
   try {
-    await apiFetch(`/products/${_editProductId}`, 'DELETE');
+    try { await apiFetch(`/products/${_editProductId}`, 'DELETE'); }
+    catch(apiErr) {
+      await fetch(SUPA_FB_URL + '/rest/v1/konekta_products?id=eq.' + _editProductId, {
+        method: 'DELETE',
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+      });
+    }
     closeModal('modal-edit-product');
     loadProducts();
   } catch(e) { alert('Erreur : ' + e.message); }
