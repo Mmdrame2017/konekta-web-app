@@ -500,9 +500,16 @@
 
     <!-- ── TAB: MARKETPLACE ── -->
     <div class="tab-content scrollbar-custom" id="tab-marketplace" style="flex-direction:column;overflow-y:auto">
-      <div class="marketplace-header">
+      <div class="marketplace-header" style="flex-wrap:wrap;gap:10px">
         <h3>🛍️ Marketplace</h3>
-        <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="openAddProductModal()">+ Vendre</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <!-- Toggle Vente / Location -->
+          <div id="market-mode-toggle" style="display:flex;background:var(--bg3);border-radius:20px;overflow:hidden;border:1px solid var(--border)">
+            <button onclick="switchMarketMode('sale')" id="mode-sale-btn" style="padding:6px 16px;border:none;background:var(--primary);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.2s">🛒 Vente</button>
+            <button onclick="switchMarketMode('rental')" id="mode-rental-btn" style="padding:6px 16px;border:none;background:transparent;color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:.2s">🔑 Location</button>
+          </div>
+          <button class="btn btn-primary" style="width:auto;padding:8px 16px;font-size:13px" onclick="openAddProductModal()" id="market-add-btn">+ Vendre</button>
+        </div>
       </div>
       <!-- Recherche + Catégories -->
       <div style="padding:12px 16px 0">
@@ -743,7 +750,7 @@
 <div class="modal-overlay" id="modal-add-product">
   <div class="modal">
     <div class="modal-header">
-      <h3>🏪 Mettre en vente</h3>
+      <h3 id="add-product-title">🏪 Mettre en vente</h3>
       <button class="close-btn" onclick="closeModal('modal-add-product')">✕</button>
     </div>
     <div class="form-group">
@@ -775,9 +782,28 @@
         <option value="Autre">📦 Autre</option>
       </select>
     </div>
-    <div class="form-group">
+    <div class="form-group" id="prod-price-sale-group">
       <label>Prix (FCFA) *</label>
       <input type="number" id="prod-price" placeholder="Ex: 350000" min="100">
+    </div>
+    <!-- Champs Location (cachés par défaut) -->
+    <div id="prod-rental-fields" style="display:none">
+      <div class="form-group">
+        <label>Prix par jour (FCFA) *</label>
+        <input type="number" id="prod-price-day" placeholder="Ex: 25000" min="100">
+      </div>
+      <div class="form-group">
+        <label>Prix par mois (FCFA)</label>
+        <input type="number" id="prod-price-month" placeholder="Ex: 500000" min="0">
+      </div>
+      <div class="form-group">
+        <label>Caution (FCFA)</label>
+        <input type="number" id="prod-deposit" placeholder="Ex: 100000" min="0">
+      </div>
+      <div class="form-group">
+        <label>Localisation</label>
+        <input type="text" id="prod-location" placeholder="Ex: Dakar, Plateau">
+      </div>
     </div>
     <div class="form-group">
       <label>Photo du produit</label>
@@ -2690,6 +2716,20 @@ async function initWavePayment() {
 //  MARKETPLACE
 // ════════════════════════════════════════════════════════════
 let _currentCategory = 'all';
+let _marketMode = 'sale'; // 'sale' ou 'rental'
+
+function switchMarketMode(mode) {
+  _marketMode = mode;
+  const saleBtn = document.getElementById('mode-sale-btn');
+  const rentalBtn = document.getElementById('mode-rental-btn');
+  const addBtn = document.getElementById('market-add-btn');
+  saleBtn.style.background = mode === 'sale' ? 'var(--primary)' : 'transparent';
+  saleBtn.style.color = mode === 'sale' ? '#fff' : 'var(--text2)';
+  rentalBtn.style.background = mode === 'rental' ? 'var(--primary)' : 'transparent';
+  rentalBtn.style.color = mode === 'rental' ? '#fff' : 'var(--text2)';
+  addBtn.textContent = mode === 'sale' ? '+ Vendre' : '+ Louer';
+  loadProducts();
+}
 
 function filterProducts() {
   const q = (document.getElementById('market-search')?.value || '').toLowerCase().trim();
@@ -2727,7 +2767,8 @@ async function loadProducts() {
       // Fallback Supabase direct si backend indisponible
       const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
       const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
-      const r = await fetch(sbUrl + '/rest/v1/konekta_products?available=eq.true&order=created_at.desc&select=*,seller:konekta_users!seller_id(id,name,phone)', {
+      const listingFilter = _marketMode === 'rental' ? '&or=(listing_type.eq.rental,listing_type.is.null)' : '&or=(listing_type.eq.sale,listing_type.is.null)';
+      const r = await fetch(sbUrl + '/rest/v1/konekta_products?available=eq.true&order=created_at.desc' + (_marketMode === 'rental' ? '&listing_type=eq.rental' : '&or=(listing_type.eq.sale,listing_type.is.null)') + '&select=*,seller:konekta_users!seller_id(id,name,phone)', {
         headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
       });
       data = await r.json();
@@ -2749,7 +2790,7 @@ async function loadProducts() {
       const cardClick  = isMine ? "openEditProductModal('" + pid + "')" : "openBuyModal('" + pid + "')";
       const actionBtn  = isMine
         ? "<button class='product-buy-btn' style='background:var(--bg3);color:var(--text1);border:1px solid var(--border)' onclick='event.stopPropagation();openEditProductModal(\"" + pid + "\")'>✏️ Modifier</button>"
-        : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>Acheter</button>";
+        : "<button class='product-buy-btn' onclick='event.stopPropagation();openBuyModal(\"" + pid + "\")'>" + (p.listing_type === 'rental' ? 'Louer' : 'Acheter') + "</button>";
       return `<div class="product-card" data-name="${escHtml(p.name)}" data-category="${escHtml(p.category||'')}" onclick="${cardClick}">
         <div class="product-img">${imgContent}</div>
         <div class="product-info">
@@ -2757,7 +2798,10 @@ async function loadProducts() {
           <div class="product-desc">${escHtml(p.description || '')}</div>
           <div class="product-footer">
             <div>
-              <div class="product-price">${p.price.toLocaleString()} F</div>
+              <div class="product-price">${p.listing_type === 'rental' ? (p.price_per_day || p.price || 0).toLocaleString() + ' F/jour' : p.price.toLocaleString() + ' F'}</div>
+              ${p.listing_type === 'rental' && p.price_per_month ? '<div style="font-size:11px;color:var(--text2)">' + p.price_per_month.toLocaleString() + ' F/mois</div>' : ''}
+              ${p.listing_type === 'rental' && p.deposit ? '<div style="font-size:10px;color:var(--warning)">Caution: ' + p.deposit.toLocaleString() + ' F</div>' : ''}
+              ${p.location ? '<div style="font-size:10px;color:var(--text2)">📍 ' + escHtml(p.location) + '</div>' : ''}
               <div class="product-seller">${escHtml(sellerName)}</div>
             </div>
             ${actionBtn}
@@ -2778,6 +2822,19 @@ function openAddProductModal() {
   document.getElementById('prod-price').value = '';
   document.getElementById('prod-emoji').value = '📦';
   document.getElementById('prod-msg').textContent = '';
+  const isRental = _marketMode === 'rental';
+  document.getElementById('add-product-title').textContent = isRental ? '🔑 Mettre en location' : '🏪 Mettre en vente';
+  document.getElementById('prod-price-sale-group').style.display = isRental ? 'none' : '';
+  document.getElementById('prod-rental-fields').style.display = isRental ? '' : 'none';
+  document.getElementById('prod-name').placeholder = isRental ? 'Ex: Appartement F3 meublé' : 'Ex: iPhone 13 Pro';
+  document.getElementById('prod-desc').placeholder = isRental ? 'Ex: 3 chambres, climatisé, parking' : 'Ex: État neuf, débloqué tous réseaux';
+  document.getElementById('add-prod-btn').textContent = isRental ? 'Publier la location' : 'Publier';
+  if (isRental) {
+    document.getElementById('prod-price-day').value = '';
+    document.getElementById('prod-price-month').value = '';
+    document.getElementById('prod-deposit').value = '';
+    document.getElementById('prod-location').value = '';
+  }
   openModal('modal-add-product');
 }
 
@@ -2807,7 +2864,14 @@ async function addProduct() {
   const category = document.getElementById('prod-category').value;
   const emoji = document.getElementById('prod-emoji').value.trim();
   const btn = document.getElementById('add-prod-btn');
-  if (!name || !price) { showMsg('prod-msg', 'Nom et prix requis', 'error'); return; }
+  const isRental = _marketMode === 'rental';
+  const priceDay = document.getElementById('prod-price-day')?.value || '';
+  const priceMonth = document.getElementById('prod-price-month')?.value || '';
+  const deposit = document.getElementById('prod-deposit')?.value || '';
+  const locationText = document.getElementById('prod-location')?.value?.trim() || '';
+  if (!name) { showMsg('prod-msg', 'Nom requis', 'error'); return; }
+  if (!isRental && !price) { showMsg('prod-msg', 'Prix requis', 'error'); return; }
+  if (isRental && !priceDay) { showMsg('prod-msg', 'Prix par jour requis', 'error'); return; }
   if (!category) { showMsg('prod-msg', 'Veuillez choisir une catégorie', 'error'); return; }
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Publication...';
   try {
@@ -2857,7 +2921,15 @@ async function addProduct() {
       const res = await fetch(sbUrl + '/rest/v1/konekta_products', {
         method: 'POST',
         headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ name, description, price: parseInt(price), image, category, seller_id: sellerId, available: true })
+        body: JSON.stringify({
+          name, description, image, category, seller_id: sellerId, available: true,
+          listing_type: isRental ? 'rental' : 'sale',
+          price: isRental ? parseInt(priceDay) : parseInt(price),
+          price_per_day: isRental ? parseInt(priceDay) : null,
+          price_per_month: priceMonth ? parseInt(priceMonth) : null,
+          deposit: deposit ? parseInt(deposit) : null,
+          location: locationText || null
+        })
       });
       if (!res.ok) throw new Error('Erreur publication: ' + await res.text());
     }
