@@ -1863,7 +1863,7 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         disableDeepLinking: true,
         prejoinConfig: { enabled: false },
         prejoinPageEnabled: false,
-        toolbarButtons: ['microphone', 'camera', 'hangup', 'toggle-camera'],
+        toolbarButtons: ['microphone', 'camera', 'hangup', 'toggle-camera', 'desktop', 'tileview', 'fullscreen'],
         hideConferenceSubject: true,
         hideConferenceTimer: true,
         disableModeratorIndicator: true,
@@ -1873,10 +1873,10 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         disableThirdPartyRequests: true,
         disableInviteFunctions: true,
         enableClosePage: false,
-        startWithTileView: false,
-        disableTileView: true,
-        filmstrip: { disableStageFilmstrip: true, disabled: true },
-        disableSelfView: true,
+        startWithTileView: _currentGroupId ? true : false,
+        disableTileView: _currentGroupId ? false : true,
+        filmstrip: { disableStageFilmstrip: _currentGroupId ? false : true, disabled: _currentGroupId ? false : true },
+        disableSelfView: _currentGroupId ? false : true,
         disableSelfViewSettings: true,
         p2p: { enabled: true }
       },
@@ -2173,6 +2173,22 @@ function startCallStatusPoll() {
 
 // --- Contrôles Jitsi (boutons natifs dans l'iframe) ---
 // Les contrôles sont maintenant gérés par la toolbar Jitsi native
+async function startScreenShare() {
+  if (!currentChat || !_currentGroupId) return;
+  _currentCallType = 'video';
+  // Lancer un appel de groupe avec partage d'écran activé
+  await openCallRoom('video');
+  // Activer le partage d'écran dès que Jitsi est prêt
+  if (window._jitsiApi) {
+    window._jitsiApi.addListener('videoConferenceJoined', function onJoin() {
+      window._jitsiApi.removeListener('videoConferenceJoined', onJoin);
+      setTimeout(() => {
+        if (window._jitsiApi) window._jitsiApi.executeCommand('toggleShareScreen');
+      }, 2000);
+    });
+  }
+}
+
 function jitsiToggleMute() {} // noop - géré par Jitsi
 function jitsiToggleVideo() {} // noop - géré par Jitsi
 function jitsiSwitchCamera() {} // noop - géré par Jitsi
@@ -2574,7 +2590,7 @@ function openChat(contact) {
       <div class="chat-header-actions">
         <button class="icon-btn" onclick="startCall('audio')" title="Appel vocal">📞</button>
         <button class="icon-btn" onclick="startCall('video')" title="Appel vidéo">📹</button>
-        ${contact.isGroup ? '<button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>' : '<button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
+        ${contact.isGroup ? '<button class="icon-btn" onclick="startScreenShare()" title="Partage d\'écran" style="font-size:14px">🖥️</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>' : '<button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
       </div>
     </div>
     <div class="messages-area scrollbar-custom" id="messages-area"></div>
