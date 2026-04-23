@@ -483,7 +483,7 @@
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
           <div style="margin:12px;display:flex;gap:8px">
             <button class="new-chat-btn" onclick="openNewChatModal()" style="flex:1;margin:0">+ Conversation</button>
-            <button class="new-chat-btn" onclick="openNewGroupModal()" style="flex:1;margin:0;background:var(--wave)">👥 Groupe</button>
+            <button class="new-chat-btn" onclick="openNewGroupModal()" style="flex:1;margin:0;background:var(--wave)">🏗️ Co-Construction</button>
           </div>
         </div>
 
@@ -695,23 +695,23 @@
 <div class="modal-overlay" id="modal-new-group">
   <div class="modal">
     <div class="modal-header">
-      <h3>👥 Créer un groupe</h3>
+      <h3>🏗️ Créer un espace Co-Construction</h3>
       <button class="close-btn" onclick="closeModal('modal-new-group')">✕</button>
     </div>
     <div class="form-group">
-      <label>Nom du groupe *</label>
-      <input type="text" id="group-name" placeholder="Ex: Famille Diallo, Collègues...">
+      <label>Nom de l'espace *</label>
+      <input type="text" id="group-name" placeholder="Ex: Projet Alpha, Comité RH...">
     </div>
     <div class="form-group">
       <label>Description</label>
-      <input type="text" id="group-desc" placeholder="Ex: Groupe familial">
+      <input type="text" id="group-desc" placeholder="Ex: Réunions hebdo, Sprint planning...">
     </div>
     <div class="form-group">
       <label>Ajouter des membres (numéros séparés par virgule)</label>
       <textarea id="group-members" placeholder="Ex: 77 123 45 67, 78 234 56 78" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;min-height:60px;resize:vertical"></textarea>
     </div>
     <div class="form-group">
-      <label>Photo du groupe</label>
+      <label>Photo de l'espace</label>
       <div style="display:flex;align-items:center;gap:12px">
         <input type="text" id="group-emoji" value="👥" maxlength="4" style="width:60px;text-align:center;font-size:24px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
         <span style="font-size:12px;color:var(--text2)">Choisissez un emoji</span>
@@ -720,15 +720,52 @@
     <p class="msg" id="group-msg"></p>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-group')">Annuler</button>
-      <button class="btn btn-primary" onclick="createGroup()" id="create-group-btn" style="background:var(--wave)">Créer le groupe</button>
+      <button class="btn btn-primary" onclick="createGroup()" id="create-group-btn" style="background:var(--wave)">Créer l'espace</button>
     </div>
   </div>
 </div>
 
 <!-- Call Overlay (Jitsi IFrame API) -->
-<div id="call-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:10000;flex-direction:column">
-  <div id="jitsi-container" style="position:absolute;inset:0"></div>
-  <div id="call-timer-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem;z-index:9999;pointer-events:none">00:00</div>
+<div id="call-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:10000;flex-direction:row">
+  <div style="flex:1;position:relative;min-width:0">
+    <div id="jitsi-container" style="position:absolute;inset:0"></div>
+    <div id="call-timer-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem;z-index:9999;pointer-events:none">00:00</div>
+    <!-- Bouton toggle notes (flottant) -->
+    <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:absolute;top:8px;right:8px;z-index:9999;background:rgba(0,168,132,0.9);color:#fff;border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📋 Notes</button>
+  </div>
+  <!-- Panel notes de réunion (caché par défaut) -->
+  <div id="meeting-notes-panel" style="display:none;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;flex-shrink:0;z-index:9999">
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;font-weight:700;color:var(--text)">📋 Notes de réunion</span>
+      <button onclick="toggleMeetingNotes()" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer">✕</button>
+    </div>
+    <!-- Ordre du jour -->
+    <div id="meeting-agenda-display" style="padding:8px 12px;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border);max-height:60px;overflow-y:auto;display:none"></div>
+    <!-- Types de notes -->
+    <div style="padding:8px 12px;display:flex;gap:6px;border-bottom:1px solid var(--border)">
+      <button onclick="setNoteType('note')" id="note-type-note" style="flex:1;padding:5px;border:1px solid var(--primary);border-radius:6px;background:var(--primary);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📝 Note</button>
+      <button onclick="setNoteType('decision')" id="note-type-decision" style="flex:1;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✅ Décision</button>
+      <button onclick="setNoteType('action')" id="note-type-action" style="flex:1;padding:5px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">📌 Action</button>
+    </div>
+    <!-- Liste des notes -->
+    <div id="meeting-notes-list" style="flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px;min-height:0">
+      <div style="text-align:center;color:var(--text2);font-size:12px;padding:20px">La réunion vient de commencer</div>
+    </div>
+    <!-- Input note -->
+    <div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px;align-items:flex-end">
+      <div style="flex:1">
+        <input type="text" id="meeting-note-assignee" placeholder="Responsable..." style="display:none;width:100%;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;margin-bottom:4px;font-family:inherit">
+        <textarea id="meeting-note-input" placeholder="Saisir une note..." style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit;resize:none;min-height:36px;max-height:80px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMeetingNote()}"></textarea>
+      </div>
+      <button onclick="sendMeetingNote()" style="width:36px;height:36px;border-radius:50%;background:var(--primary);border:none;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0">➤</button>
+    </div>
+    <!-- Transcription toggle -->
+    <div id="meeting-speech-bar" style="display:none;padding:6px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;font-size:11px">
+      <span style="width:8px;height:8px;border-radius:50%;background:#E74C3C;animation:pulse 1.5s infinite"></span>
+      <span style="color:var(--text2)">Transcription active</span>
+      <button onclick="stopSpeechTranscription()" style="margin-left:auto;background:none;border:none;color:#E74C3C;font-size:11px;cursor:pointer;font-family:inherit">Arrêter</button>
+    </div>
+  </div>
 </div>
 
 <!-- Voice Record Indicator -->
@@ -947,7 +984,7 @@
         </div>
         <input type="file" id="group-avatar-upload" accept="image/*" style="display:none" onchange="onGroupAvatarSelected(this)">
         <div style="flex:1">
-          <input type="text" id="group-edit-name" placeholder="Nom du groupe" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit">
+          <input type="text" id="group-edit-name" placeholder="Nom de l'espace" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit">
         </div>
       </div>
       <button class="btn btn-primary" onclick="saveGroupInfo()" style="width:100%;padding:8px;font-size:13px" id="group-save-btn">Enregistrer</button>
@@ -965,10 +1002,73 @@
       </div>
       <div id="group-add-results" style="max-height:150px;overflow-y:auto"></div>
     </div>
+    <!-- Onglets Membres / Réunions -->
+    <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border)">
+      <button onclick="showGroupTab('members')" id="grp-tab-members" style="flex:1;padding:8px;border:none;background:transparent;color:var(--primary);font-size:13px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--primary);font-family:inherit">👥 Membres</button>
+      <button onclick="showGroupTab('meetings')" id="grp-tab-meetings" style="flex:1;padding:8px;border:none;background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit">📋 Réunions</button>
+    </div>
     <!-- Liste des membres -->
     <div id="group-members-list" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto"></div>
+    <!-- Historique des réunions -->
+    <div id="group-meetings-list" style="display:none;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto">
+      <div style="text-align:center;color:var(--text2);font-size:12px;padding:20px">Chargement...</div>
+    </div>
     <div style="margin-top:16px">
       <button class="btn btn-secondary" onclick="closeModal('modal-group-info')" style="color:var(--text2)">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pre-Meeting Modal -->
+<div class="modal-overlay" id="modal-pre-meeting">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🎬 Démarrer une réunion</h3>
+      <button class="close-btn" onclick="closeModal('modal-pre-meeting')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Titre de la réunion *</label>
+      <input type="text" id="meeting-title" placeholder="Ex: Sprint Planning #12">
+    </div>
+    <div class="form-group">
+      <label>Ordre du jour</label>
+      <textarea id="meeting-agenda" placeholder="1. Point d'avancement&#10;2. Budget Q2&#10;3. Planning" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;min-height:80px;resize:vertical"></textarea>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="meeting-notes-enabled" checked> 📋 Notes collaboratives
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="meeting-speech-enabled"> 🎙️ Transcription auto <span style="font-size:10px;background:var(--bg3);padding:1px 6px;border-radius:8px">Chrome</span>
+      </label>
+    </div>
+    <div class="form-group">
+      <label>Type d'appel</label>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('meeting-call-type').value='video';this.style.background='var(--primary)';this.style.color='#fff';this.nextElementSibling.style.background='var(--bg3)';this.nextElementSibling.style.color='var(--text2)'" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600">📹 Vidéo</button>
+        <button onclick="document.getElementById('meeting-call-type').value='audio';this.style.background='var(--primary)';this.style.color='#fff';this.previousElementSibling.style.background='var(--bg3)';this.previousElementSibling.style.color='var(--text2)'" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text2);cursor:pointer;font-family:inherit;font-size:13px;font-weight:600">📞 Audio</button>
+      </div>
+      <input type="hidden" id="meeting-call-type" value="video">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-pre-meeting')">Annuler</button>
+      <button class="btn btn-primary" onclick="startMeeting()" id="start-meeting-btn">🎬 Démarrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- PV Viewer Modal -->
+<div class="modal-overlay" id="modal-pv-viewer">
+  <div class="modal" style="max-width:700px;max-height:85vh">
+    <div class="modal-header">
+      <h3 id="pv-viewer-title">📋 Procès-Verbal</h3>
+      <button class="close-btn" onclick="closeModal('modal-pv-viewer')">✕</button>
+    </div>
+    <div id="pv-viewer-content" style="overflow-y:auto;max-height:60vh;padding:8px;background:var(--bg3);border-radius:var(--radius);font-size:13px;line-height:1.6;color:var(--text)"></div>
+    <div class="modal-footer" style="flex-wrap:wrap;gap:8px">
+      <button class="btn btn-secondary" onclick="downloadPV()" style="flex:1">📥 Télécharger PDF</button>
+      <button class="btn btn-secondary" onclick="sharePVtoChat()" style="flex:1;border-color:var(--primary);color:var(--primary)">📤 Partager dans le chat</button>
+      <button class="btn btn-secondary" onclick="closeModal('modal-pv-viewer')" style="flex:1">Fermer</button>
     </div>
   </div>
 </div>
@@ -1552,7 +1652,7 @@ async function loadChats() {
             : (grp.avatar || '👥');
           return '<div class="chat-item" onclick="openGroupChat(\'' + grp.id + '\',\'' + (grp.name||'').replace(/'/g,'') + '\')" data-other="grp-' + grp.id + '">'
             + '<div class="chat-avatar" style="overflow:hidden">' + avatarHtml + '</div>'
-            + '<div class="chat-item-info"><div class="chat-item-name">' + (grp.name || 'Groupe') + '</div><div class="chat-item-last">Groupe</div></div></div>';
+            + '<div class="chat-item-info"><div class="chat-item-name">' + (grp.name || 'Co-Construction') + '</div><div class="chat-item-last">Groupe</div></div></div>';
         }).join('');
         el.innerHTML = el.innerHTML + groupsHtml;
       }
@@ -1565,7 +1665,7 @@ function openGroupChat(groupId, name) {
   _currentGroupId = groupId;
   const cached = (window._groupCache || {})[groupId];
   const avatar = cached && cached.avatar && cached.avatar.startsWith('data:') ? cached.avatar : '';
-  openChat({ userId: 'group_' + groupId, name: name, phone: 'Groupe', avatar: avatar, isGroup: true, groupId: groupId });
+  openChat({ userId: 'group_' + groupId, name: name, phone: 'Co-Construction', avatar: avatar, isGroup: true, groupId: groupId });
 }
 
 async function openGroupInfo() {
@@ -1580,7 +1680,7 @@ async function openGroupInfo() {
     if (grps && grps.length > 0) {
       window._currentGroupData = grps[0];
       const g = grps[0];
-      document.getElementById('group-info-title').textContent = (g.avatar && g.avatar.length < 5 ? g.avatar + ' ' : '') + (g.name || 'Groupe');
+      document.getElementById('group-info-title').textContent = (g.avatar && g.avatar.length < 5 ? g.avatar + ' ' : '') + (g.name || 'Co-Construction');
       document.getElementById('group-info-desc').textContent = g.description || '';
       // Pré-remplir l'édition
       document.getElementById('group-edit-name').value = g.name || '';
@@ -1696,7 +1796,7 @@ async function addGroupMember(userId) {
 
 async function removeGroupMember(userId) {
   if (!_currentGroupId) return;
-  if (!confirm('Retirer ce membre du groupe ?')) return;
+  if (!confirm('Retirer ce membre ?')) return;
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
   try {
     await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&user_id=eq.' + userId, {
@@ -1837,6 +1937,16 @@ function stopRingtone() {
 async function startCall(type) {
   if (!currentChat) return;
   _currentCallType = type;
+  // Si c'est un groupe → afficher le modal pré-réunion
+  if (currentChat.isGroup && _currentGroupId) {
+    document.getElementById('meeting-title').value = '';
+    document.getElementById('meeting-agenda').value = '';
+    document.getElementById('meeting-call-type').value = type;
+    document.getElementById('meeting-notes-enabled').checked = true;
+    document.getElementById('meeting-speech-enabled').checked = false;
+    openModal('modal-pre-meeting');
+    return;
+  }
   await openCallRoom(type);
 }
 
@@ -1941,6 +2051,7 @@ function jitsiHangup() {
   stopRingtone();
   clearInterval(_callTimer); _callTimer = null;
   if (_callStatusPoll) { clearInterval(_callStatusPoll); _callStatusPoll = null; }
+  if (_currentMeetingSession) endMeeting();
   if (window._jitsiApi) { try { window._jitsiApi.executeCommand('hangup'); } catch(e) {} try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-container').innerHTML = '';
   document.getElementById('call-overlay').style.display = 'none';
@@ -2195,6 +2306,298 @@ function jitsiSwitchCamera() {} // noop - géré par Jitsi
 // Compat ancien code
 function toggleMute() { jitsiToggleMute(); }
 function toggleVideo() { jitsiToggleVideo(); }
+
+function showGroupTab(tab) {
+  const membersTab = document.getElementById('grp-tab-members');
+  const meetingsTab = document.getElementById('grp-tab-meetings');
+  const membersList = document.getElementById('group-members-list');
+  const meetingsList = document.getElementById('group-meetings-list');
+  if (tab === 'members') {
+    membersTab.style.color = 'var(--primary)'; membersTab.style.borderBottom = '2px solid var(--primary)';
+    meetingsTab.style.color = 'var(--text2)'; meetingsTab.style.borderBottom = '2px solid transparent';
+    membersList.style.display = 'flex'; meetingsList.style.display = 'none';
+  } else {
+    meetingsTab.style.color = 'var(--primary)'; meetingsTab.style.borderBottom = '2px solid var(--primary)';
+    membersTab.style.color = 'var(--text2)'; membersTab.style.borderBottom = '2px solid transparent';
+    membersList.style.display = 'none'; meetingsList.style.display = 'flex';
+    loadGroupMeetings();
+  }
+}
+
+async function loadGroupMeetings() {
+  if (!_currentGroupId) return;
+  const list = document.getElementById('group-meetings-list');
+  try {
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?group_id=eq.' + _currentGroupId + '&order=created_at.desc&limit=20&select=*', {
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+    });
+    const sessions = await r.json();
+    if (!Array.isArray(sessions) || sessions.length === 0) {
+      list.innerHTML = '<div style="text-align:center;color:var(--text2);font-size:12px;padding:20px">Aucune réunion</div>';
+      return;
+    }
+    list.innerHTML = sessions.map(s => {
+      const date = new Date(s.started_at).toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      const duration = s.ended_at ? Math.round((new Date(s.ended_at) - new Date(s.started_at)) / 60000) + ' min' : 'En cours';
+      const participants = Array.isArray(s.participants) ? s.participants.length : 0;
+      const hasPV = !!s.pv_html;
+      const statusColor = s.status === 'active' ? '#00A884' : 'var(--text2)';
+      return '<div style="padding:10px;background:var(--bg3);border-radius:8px;cursor:pointer" ' + (hasPV ? 'onclick="viewMeetingPV(\'' + s.id + '\')"' : '') + '>'
+        + '<div style="display:flex;align-items:center;justify-content:space-between">'
+        + '<div style="font-size:14px;font-weight:600;color:var(--text)">' + escHtml(s.title || 'Réunion') + '</div>'
+        + '<span style="font-size:10px;color:' + statusColor + '">' + (s.status === 'active' ? '🟢 En cours' : duration) + '</span></div>'
+        + '<div style="font-size:11px;color:var(--text2);margin-top:4px">📅 ' + date + ' · 👥 ' + participants + ' participants</div>'
+        + (hasPV ? '<div style="font-size:11px;color:var(--primary);margin-top:4px">📋 PV disponible — cliquer pour voir</div>' : (s.status === 'ended' && !hasPV ? '<button onclick="event.stopPropagation();generatePV(\'' + s.id + '\')" style="margin-top:6px;padding:4px 10px;background:var(--primary);border:none;border-radius:6px;color:#fff;font-size:11px;cursor:pointer;font-family:inherit">Générer le PV</button>' : ''))
+        + '</div>';
+    }).join('');
+  } catch(e) { list.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">Erreur: ' + e.message + '</div>'; }
+}
+
+async function viewMeetingPV(sessionId) {
+  try {
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?id=eq.' + sessionId + '&select=title,pv_html', {
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+    });
+    const rows = await r.json();
+    if (rows && rows.length > 0 && rows[0].pv_html) {
+      closeModal('modal-group-info');
+      showPVModal(rows[0].pv_html, rows[0].title || 'Réunion');
+    }
+  } catch(e) { alert('Erreur: ' + e.message); }
+}
+
+// ════════════════════════════════════════════════════════════
+//  RÉUNIONS CO-CONSTRUCTION
+// ════════════════════════════════════════════════════════════
+let _currentMeetingSession = null;
+let _meetingNoteType = 'note';
+let _meetingNotesPoll = null;
+let _speechRecognition = null;
+let _meetingStartTime = null;
+
+async function startMeeting() {
+  const title = document.getElementById('meeting-title').value.trim();
+  if (!title) { alert('Titre de la réunion requis'); return; }
+  const agenda = document.getElementById('meeting-agenda').value.trim();
+  const callType = document.getElementById('meeting-call-type').value || 'video';
+  const notesEnabled = document.getElementById('meeting-notes-enabled').checked;
+  const speechEnabled = document.getElementById('meeting-speech-enabled').checked;
+  const btn = document.getElementById('start-meeting-btn');
+  btn.disabled = true; btn.textContent = 'Lancement...';
+  try {
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    const roomId = 'konekta-grp-' + _currentGroupId.slice(0,20);
+    // Créer la session de réunion
+    const res = await fetch(sbUrl + '/rest/v1/konekta_meeting_sessions', {
+      method: 'POST', headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ group_id: _currentGroupId, title, agenda, started_by: me.id, jitsi_room: roomId, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }] })
+    });
+    const data = await res.json();
+    _currentMeetingSession = Array.isArray(data) ? data[0] : data;
+    _meetingStartTime = Date.now();
+    closeModal('modal-pre-meeting');
+    // Lancer l'appel de groupe
+    _currentCallType = callType;
+    await openCallRoom(callType);
+    // Activer le panel de notes
+    if (notesEnabled) {
+      const panel = document.getElementById('meeting-notes-panel');
+      const toggle = document.getElementById('meeting-notes-toggle');
+      panel.style.display = 'flex';
+      toggle.style.display = 'block';
+      if (agenda) {
+        const agendaDiv = document.getElementById('meeting-agenda-display');
+        agendaDiv.style.display = 'block';
+        agendaDiv.innerHTML = '<strong>📋 Ordre du jour :</strong><br>' + agenda.replace(/\n/g, '<br>');
+      }
+      startMeetingNotesPoll();
+    }
+    // Activer transcription
+    if (speechEnabled) startSpeechTranscription();
+  } catch(e) { alert('Erreur: ' + e.message); }
+  btn.disabled = false; btn.textContent = '🎬 Démarrer';
+}
+
+function toggleMeetingNotes() {
+  const panel = document.getElementById('meeting-notes-panel');
+  panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+}
+
+function setNoteType(type) {
+  _meetingNoteType = type;
+  ['note','decision','action'].forEach(t => {
+    const btn = document.getElementById('note-type-' + t);
+    if (t === type) { btn.style.background = 'var(--primary)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--primary)'; }
+    else { btn.style.background = 'var(--bg3)'; btn.style.color = 'var(--text2)'; btn.style.borderColor = 'var(--border)'; }
+  });
+  document.getElementById('meeting-note-assignee').style.display = type === 'action' ? 'block' : 'none';
+}
+
+async function sendMeetingNote() {
+  if (!_currentMeetingSession) return;
+  const input = document.getElementById('meeting-note-input');
+  const content = input.value.trim();
+  if (!content) return;
+  input.value = '';
+  const assignee = _meetingNoteType === 'action' ? (document.getElementById('meeting-note-assignee').value.trim() || null) : null;
+  const elapsed = _meetingStartTime ? Date.now() - _meetingStartTime : 0;
+  try {
+    await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes', {
+      method: 'POST',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ session_id: _currentMeetingSession.id, author_id: me.id, author_name: me.name || me.phone || 'Moi', content, note_type: _meetingNoteType, assignee, timestamp_ms: elapsed })
+    });
+    appendMeetingNoteUI({ author_name: me.name || me.phone, content, note_type: _meetingNoteType, assignee, timestamp_ms: elapsed });
+  } catch(e) { console.error('sendMeetingNote:', e); }
+}
+
+function appendMeetingNoteUI(note) {
+  const list = document.getElementById('meeting-notes-list');
+  if (!list) return;
+  if (list.querySelector('[data-placeholder]') || list.children.length === 1 && list.children[0].textContent.includes('vient de commencer')) list.innerHTML = '';
+  const icons = { note: '📝', decision: '✅', action: '📌', speech_transcript: '🎙️' };
+  const colors = { note: 'var(--text)', decision: '#00A884', action: '#53BDEB', speech_transcript: 'var(--text2)' };
+  const elapsed = note.timestamp_ms ? Math.floor(note.timestamp_ms / 60000) + ':' + String(Math.floor((note.timestamp_ms % 60000) / 1000)).padStart(2, '0') : '';
+  const div = document.createElement('div');
+  div.style.cssText = 'padding:6px 8px;background:var(--bg3);border-radius:8px;border-left:3px solid ' + (colors[note.note_type] || 'var(--border)');
+  div.innerHTML = '<div style="display:flex;align-items:center;gap:4px;margin-bottom:2px"><span style="font-size:12px">' + (icons[note.note_type] || '📝') + '</span><span style="font-size:11px;font-weight:600;color:' + (colors[note.note_type] || 'var(--text)') + '">' + (note.author_name || 'Anonyme') + '</span>' + (elapsed ? '<span style="font-size:10px;color:var(--text2);margin-left:auto">' + elapsed + '</span>' : '') + '</div>'
+    + '<div style="font-size:12px;color:var(--text);line-height:1.4">' + escHtml(note.content) + '</div>'
+    + (note.assignee ? '<div style="font-size:10px;color:var(--wave);margin-top:2px">→ ' + escHtml(note.assignee) + '</div>' : '');
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+function startMeetingNotesPoll() {
+  if (_meetingNotesPoll) clearInterval(_meetingNotesPoll);
+  let lastCount = 0;
+  _meetingNotesPoll = setInterval(async () => {
+    if (!_currentMeetingSession) { clearInterval(_meetingNotesPoll); return; }
+    try {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes?session_id=eq.' + _currentMeetingSession.id + '&order=created_at.asc&select=*', {
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+      });
+      const notes = await r.json();
+      if (Array.isArray(notes) && notes.length !== lastCount) {
+        lastCount = notes.length;
+        const list = document.getElementById('meeting-notes-list');
+        if (list) { list.innerHTML = ''; notes.forEach(n => appendMeetingNoteUI(n)); }
+      }
+    } catch(e) {}
+  }, 3000);
+}
+
+// Web Speech API (optionnel, Chrome)
+function startSpeechTranscription() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Transcription non disponible sur ce navigateur (Chrome requis)');
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  _speechRecognition = new SR();
+  _speechRecognition.continuous = true;
+  _speechRecognition.interimResults = false;
+  _speechRecognition.lang = 'fr-FR';
+  _speechRecognition.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        const text = event.results[i][0].transcript.trim();
+        if (text.length > 5 && _currentMeetingSession) {
+          const elapsed = _meetingStartTime ? Date.now() - _meetingStartTime : 0;
+          fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes', {
+            method: 'POST',
+            headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ session_id: _currentMeetingSession.id, author_id: me.id, author_name: me.name || me.phone, content: text, note_type: 'speech_transcript', timestamp_ms: elapsed })
+          }).catch(() => {});
+        }
+      }
+    }
+  };
+  _speechRecognition.onend = () => { if (_speechRecognition) _speechRecognition.start(); };
+  _speechRecognition.start();
+  document.getElementById('meeting-speech-bar').style.display = 'flex';
+}
+
+function stopSpeechTranscription() {
+  if (_speechRecognition) { _speechRecognition.onend = null; _speechRecognition.stop(); _speechRecognition = null; }
+  const bar = document.getElementById('meeting-speech-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+// Fin de réunion — surcharge jitsiHangup
+const _originalJitsiHangup = typeof jitsiHangup === 'function' ? jitsiHangup : null;
+
+function endMeeting() {
+  stopSpeechTranscription();
+  if (_meetingNotesPoll) { clearInterval(_meetingNotesPoll); _meetingNotesPoll = null; }
+  // Fermer le panel de notes
+  const panel = document.getElementById('meeting-notes-panel');
+  if (panel) panel.style.display = 'none';
+  const toggle = document.getElementById('meeting-notes-toggle');
+  if (toggle) toggle.style.display = 'none';
+  // Marquer la session comme terminée
+  if (_currentMeetingSession) {
+    fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?id=eq.' + _currentMeetingSession.id, {
+      method: 'PATCH',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ status: 'ended', ended_at: new Date().toISOString() })
+    }).catch(() => {});
+    // Proposer de générer le PV
+    setTimeout(() => {
+      if (confirm('Réunion terminée. Générer le Procès-Verbal ?')) {
+        generatePV(_currentMeetingSession.id);
+      }
+      _currentMeetingSession = null;
+    }, 500);
+  } else {
+    _currentMeetingSession = null;
+  }
+}
+
+async function generatePV(sessionId) {
+  try {
+    const res = await fetch('https://n8n.srv1424726.hstgr.cloud/webhook/generate-meeting-pv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId })
+    });
+    const data = await res.json();
+    if (data.pv_html) {
+      showPVModal(data.pv_html, data.title || 'Réunion');
+    } else {
+      alert('Erreur lors de la génération du PV');
+    }
+  } catch(e) { alert('Erreur: ' + e.message); }
+}
+
+function showPVModal(pvHtml, title) {
+  document.getElementById('pv-viewer-title').textContent = '📋 ' + title;
+  document.getElementById('pv-viewer-content').innerHTML = pvHtml;
+  window._lastPVHtml = pvHtml;
+  window._lastPVTitle = title;
+  openModal('modal-pv-viewer');
+}
+
+function downloadPV() {
+  if (!window._lastPVHtml) return;
+  const win = window.open('', '_blank');
+  win.document.write('<html><head><title>' + (window._lastPVTitle || 'PV') + '</title>');
+  win.document.write('<style>body{font-family:Arial,sans-serif;padding:40px;max-width:800px;margin:auto;color:#222;line-height:1.6}h1{color:#00A884;border-bottom:2px solid #00A884;padding-bottom:8px}h2{color:#333;margin-top:24px}table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}.decision{background:#e8f5e9;padding:8px;border-radius:4px;margin:4px 0}.action{background:#e3f2fd;padding:8px;border-radius:4px;margin:4px 0}</style>');
+  win.document.write('</head><body>' + window._lastPVHtml + '</body></html>');
+  win.document.close();
+  win.print();
+}
+
+function sharePVtoChat() {
+  if (!window._lastPVHtml || !currentChat) return;
+  const chatId = getChatId(me.id, currentChat.userId);
+  fetch(SUPA_FB_URL + '/rest/v1/konekta_messages', {
+    method: 'POST',
+    headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'text', content: '📋 PV de réunion : ' + (window._lastPVTitle || 'Réunion') + '\n\n' + window._lastPVHtml.replace(/<[^>]*>/g, '') .substring(0, 500) + '...' })
+  }).catch(() => {});
+  closeModal('modal-pv-viewer');
+  alert('PV partagé dans le chat !');
+}
 
 // ════════════════════════════════════════════════════════════
 //  MESSAGES VOCAUX
