@@ -1544,8 +1544,12 @@ async function loadChats() {
       if (Array.isArray(grpRows)) {
         const groupsHtml = grpRows.filter(g => g.konekta_groups).map(g => {
           const grp = g.konekta_groups;
-          return '<div class="chat-item" onclick="openGroupChat(\'' + grp.id + '\',\'' + (grp.name||'').replace(/'/g,'') + '\',\'' + (grp.avatar||'👥') + '\')" data-other="grp-' + grp.id + '">'
-            + '<div class="chat-avatar">' + (grp.avatar || '👥') + '</div>'
+          const isImg = grp.avatar && grp.avatar.startsWith('data:');
+          const avatarHtml = isImg
+            ? '<img src="' + grp.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+            : (grp.avatar || '👥');
+          return '<div class="chat-item" onclick="openGroupChat(\'' + grp.id + '\',\'' + (grp.name||'').replace(/'/g,'') + '\',\'\')" data-other="grp-' + grp.id + '">'
+            + '<div class="chat-avatar" style="overflow:hidden">' + avatarHtml + '</div>'
             + '<div class="chat-item-info"><div class="chat-item-name">' + (grp.name || 'Groupe') + '</div><div class="chat-item-last">Groupe</div></div></div>';
         }).join('');
         el.innerHTML = el.innerHTML + groupsHtml;
