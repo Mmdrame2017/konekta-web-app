@@ -2657,8 +2657,9 @@ function appendMessage(msg, isHistory=false) {
       <div class="msg-time">${time}</div>
     </div>`;
   } else {
+    const content = msg.content || '';
     html = `<div class="msg-bubble ${isSent?'sent':'recv'}">
-      ${escHtml(msg.content || '')}
+      ${formatMsgContent(content)}
       <div class="msg-time">${time}</div>
     </div>`;
   }
@@ -3444,6 +3445,40 @@ function showMsg(id, text, type='') {
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatMsgContent(text) {
+  const s = String(text);
+  // Vérifier si c'est une URL complète
+  const urlMatch = s.match(/^(https?:\/\/\S+)$/i);
+  if (urlMatch) {
+    const url = urlMatch[1];
+    const lower = url.toLowerCase();
+    // Image
+    if (lower.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/)) {
+      return '<div style="margin:4px 0"><img src="' + escHtml(url) + '" style="max-width:100%;max-height:300px;border-radius:8px;cursor:pointer" onclick="zoomImage(\'' + escHtml(url) + '\')" loading="lazy"></div>';
+    }
+    // PDF
+    if (lower.match(/\.pdf(\?.*)?$/)) {
+      const fname = decodeURIComponent(url.split('/').pop().split('?')[0]).replace(/_/g, ' ');
+      return '<a href="' + escHtml(url) + '" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;background:rgba(255,255,255,0.08);padding:10px 12px;border-radius:8px;margin:4px 0">'
+        + '<span style="font-size:28px;flex-shrink:0">📄</span>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(fname) + '</div><div style="font-size:11px;color:var(--text2)">PDF — Appuyer pour ouvrir</div></div>'
+        + '<span style="font-size:16px;color:var(--wave)">⬇</span></a>';
+    }
+    // Vidéo
+    if (lower.match(/\.(mp4|webm|mov)(\?.*)?$/)) {
+      return '<video src="' + escHtml(url) + '" controls style="max-width:100%;max-height:300px;border-radius:8px;margin:4px 0" preload="metadata"></video>';
+    }
+    // Autre fichier (lien cliquable)
+    const fname = decodeURIComponent(url.split('/').pop().split('?')[0]);
+    return '<a href="' + escHtml(url) + '" target="_blank" style="display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;background:rgba(255,255,255,0.08);padding:10px 12px;border-radius:8px;margin:4px 0">'
+      + '<span style="font-size:24px;flex-shrink:0">📎</span>'
+      + '<div style="flex:1;min-width:0;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(fname) + '</div>'
+      + '<span style="font-size:16px;color:var(--wave)">⬇</span></a>';
+  }
+  // Texte avec des URLs à l'intérieur → rendre cliquables
+  return escHtml(s).replace(/(https?:\/\/\S+)/gi, '<a href="$1" target="_blank" style="color:var(--wave);text-decoration:underline;word-break:break-all">$1</a>');
 }
 
 // Enter key on login inputs
