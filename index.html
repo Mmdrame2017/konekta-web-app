@@ -483,7 +483,17 @@
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
           <div style="margin:12px;display:flex;gap:8px">
             <button class="new-chat-btn" onclick="openNewChatModal()" style="flex:1;margin:0">+ Conversation</button>
-            <button class="new-chat-btn" onclick="openNewGroupModal()" style="flex:1;margin:0;background:var(--wave)">🏗️ Co-Construction</button>
+            <button class="new-chat-btn" onclick="openNewGroupModal()" style="flex:1;margin:0;background:var(--wave);position:relative" onmouseenter="document.getElementById('coconstruction-tooltip').style.display='block'" onmouseleave="document.getElementById('coconstruction-tooltip').style.display='none'">🏗️ Co-Construction
+              <div id="coconstruction-tooltip" style="display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:200;text-align:left;font-size:12px;line-height:1.7;font-weight:400;color:var(--text);pointer-events:none">
+                <div style='font-weight:700;margin-bottom:6px;color:var(--primary);font-size:13px'>Comment ça marche ?</div>
+                1. Créer un espace Co-Construction<br>
+                2. Lancer une réunion 📹 ou 📞<br>
+                3. Remplir le titre + ordre du jour<br>
+                4. Prendre des notes 📝 ✅ 📌<br>
+                5. Raccrocher → Générer le PV
+                <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:12px;height:12px;background:var(--bg2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);transform:translateX(-50%) rotate(45deg)"></div>
+              </div>
+            </button>
           </div>
         </div>
 
