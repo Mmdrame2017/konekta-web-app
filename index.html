@@ -3219,10 +3219,11 @@ function openBuyModal(productId) {
   const contactLabel = isRental ? (p.owner_type === 'agence' ? '🏢 Contacter l\'agence' : p.owner_type === 'entreprise' ? '🏗️ Contacter l\'entreprise' : '📞 Contacter le propriétaire') : '💳 Payer via Wave';
   document.getElementById('buy-prod-seller-line').innerHTML = ownerLabel + ' : <span id="buy-prod-seller">' + escHtml(p.seller?.name || p.seller?.phone || '—') + '</span>';
   document.getElementById('buy-checkout-link').style.display = 'none';
-  document.getElementById('buy-prod-btn').style.display = 'block';
-  document.getElementById('buy-prod-btn').disabled = false;
-  document.getElementById('buy-prod-btn').textContent = isRental ? contactLabel : '💳 Payer via Wave';
-  document.getElementById('buy-prod-btn').style.display = isRental ? 'none' : 'block';
+  const buyBtn = document.getElementById('buy-prod-btn');
+  buyBtn.disabled = false;
+  buyBtn.innerHTML = '💳 Payer via Wave';
+  buyBtn.style.display = isRental ? 'none' : 'block';
+  buyBtn.style.background = ''; buyBtn.style.opacity = '';
   const contactBtn = document.getElementById('contact-seller-btn');
   contactBtn.style.display = 'block';
   contactBtn.textContent = isRental ? contactLabel : '💬 Contacter le vendeur';
