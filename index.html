@@ -3283,7 +3283,7 @@ async function buyProduct() {
       // Fallback : créer la session Wave via n8n + enregistrer en Supabase
       const successUrl = window.location.href.split('?')[0] + '?knk_paid=1&ref=' + reference;
       const errorUrl = window.location.href.split('?')[0] + '?knk_error=1&ref=' + reference;
-      const waveRes = await fetch('https://n8n.srv1424726.hstgr.cloud:8443/webhook/wave-checkout', {
+      const waveRes = await fetch('https://n8n.srv1424726.hstgr.cloud/webhook/wave-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount, reference, client_nom: me.name || 'Acheteur Konekta', app: 'konekta', success_url: successUrl, error_url: errorUrl })
