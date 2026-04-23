@@ -937,6 +937,21 @@
       <h3 id="group-info-title">👥 Info du groupe</h3>
       <button class="close-btn" onclick="closeModal('modal-group-info')">✕</button>
     </div>
+    <!-- Édition nom + photo (admin) -->
+    <div id="group-edit-section" style="display:none;margin-bottom:16px;background:var(--bg3);border-radius:var(--radius);padding:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div id="group-avatar-preview" onclick="document.getElementById('group-avatar-upload').click()" style="width:56px;height:56px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:28px;cursor:pointer;overflow:hidden;flex-shrink:0;position:relative">
+          <span id="group-avatar-display">👥</span>
+          <img id="group-avatar-img" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%">
+          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:#fff;font-size:8px;text-align:center;padding:1px 0">📷</div>
+        </div>
+        <input type="file" id="group-avatar-upload" accept="image/*" style="display:none" onchange="onGroupAvatarSelected(this)">
+        <div style="flex:1">
+          <input type="text" id="group-edit-name" placeholder="Nom du groupe" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveGroupInfo()" style="width:100%;padding:8px;font-size:13px" id="group-save-btn">Enregistrer</button>
+    </div>
     <div style="font-size:14px;color:var(--text2);margin-bottom:16px" id="group-info-desc"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:var(--text)">Membres <span id="group-member-count" style="color:var(--text2);font-weight:400"></span></div>
@@ -1550,12 +1565,24 @@ async function openGroupInfo() {
   const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
   const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
   // Charger le groupe
+  window._currentGroupData = null;
   try {
     const gr = await fetch(sbUrl + '/rest/v1/konekta_groups?id=eq.' + _currentGroupId + '&select=*', { headers: sbH });
     const grps = await gr.json();
     if (grps && grps.length > 0) {
-      document.getElementById('group-info-title').textContent = (grps[0].avatar || '👥') + ' ' + (grps[0].name || 'Groupe');
-      document.getElementById('group-info-desc').textContent = grps[0].description || '';
+      window._currentGroupData = grps[0];
+      const g = grps[0];
+      document.getElementById('group-info-title').textContent = (g.avatar && g.avatar.length < 5 ? g.avatar + ' ' : '') + (g.name || 'Groupe');
+      document.getElementById('group-info-desc').textContent = g.description || '';
+      // Pré-remplir l'édition
+      document.getElementById('group-edit-name').value = g.name || '';
+      const avDisplay = document.getElementById('group-avatar-display');
+      const avImg = document.getElementById('group-avatar-img');
+      if (g.avatar && g.avatar.startsWith('data:')) {
+        avImg.src = g.avatar; avImg.style.display = 'block'; avDisplay.style.display = 'none';
+      } else {
+        avDisplay.textContent = g.avatar || '👥'; avDisplay.style.display = ''; avImg.style.display = 'none';
+      }
     }
   } catch(e) {}
   document.getElementById('group-add-form').style.display = 'none';
@@ -1589,6 +1616,7 @@ async function loadGroupMembers() {
     // Vérifier si je suis admin
     const isAdmin = members.some(m => m.user_id === me.id && m.role === 'admin');
     addBtn.style.display = isAdmin ? '' : 'none';
+    document.getElementById('group-edit-section').style.display = isAdmin ? '' : 'none';
     list.innerHTML = members.map(m => {
       const u = m.konekta_users || {};
       const name = u.name || u.phone || m.user_id.slice(0,8);
@@ -1669,6 +1697,57 @@ async function removeGroupMember(userId) {
     });
     await loadGroupMembers();
   } catch(e) { alert('Erreur: ' + e.message); }
+}
+
+let _groupAvatarData = null;
+function onGroupAvatarSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 500 * 1024) { alert('Image trop grande (max 500 Ko)'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const size = 200;
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
+      _groupAvatarData = canvas.toDataURL('image/jpeg', 0.7);
+      document.getElementById('group-avatar-img').src = _groupAvatarData;
+      document.getElementById('group-avatar-img').style.display = 'block';
+      document.getElementById('group-avatar-display').style.display = 'none';
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+async function saveGroupInfo() {
+  if (!_currentGroupId) return;
+  const name = document.getElementById('group-edit-name').value.trim();
+  if (!name) { alert('Nom requis'); return; }
+  const btn = document.getElementById('group-save-btn');
+  btn.disabled = true; btn.textContent = 'Sauvegarde...';
+  try {
+    const body = { name };
+    if (_groupAvatarData) body.avatar = _groupAvatarData;
+    await fetch(SUPA_FB_URL + '/rest/v1/konekta_groups?id=eq.' + _currentGroupId, {
+      method: 'PATCH',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(body)
+    });
+    _groupAvatarData = null;
+    // Mettre à jour le titre
+    const g = window._currentGroupData || {};
+    document.getElementById('group-info-title').textContent = (body.avatar ? '' : (g.avatar && g.avatar.length < 5 ? g.avatar + ' ' : '')) + name;
+    // Refresh chat list
+    loadChats();
+    closeModal('modal-group-info');
+  } catch(e) { alert('Erreur: ' + e.message); }
+  btn.disabled = false; btn.textContent = 'Enregistrer';
 }
 
 // ════════════════════════════════════════════════════════════
