@@ -413,11 +413,12 @@
       left: 0 !important;
       right: 0 !important;
       width: 100% !important;
-      max-height: 70vh !important;
+      max-height: 75vh !important;
       border-left: none !important;
-      border-top: 1px solid var(--border) !important;
+      border-top: 2px solid var(--primary) !important;
       border-radius: 16px 16px 0 0 !important;
-      z-index: 99999 !important;
+      z-index: 999999 !important;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5) !important;
     }
   }
 </style>
@@ -757,7 +758,7 @@
     <div id="jitsi-container" style="position:absolute;inset:0"></div>
     <div id="call-timer-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem;z-index:9999;pointer-events:none">00:00</div>
     <!-- Bouton toggle notes (flottant) -->
-    <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:absolute;top:8px;right:8px;z-index:9999;background:rgba(0,168,132,0.9);color:#fff;border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📋 Notes</button>
+    <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:absolute;top:8px;right:8px;z-index:99999;background:#00A884;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 12px rgba(0,168,132,0.5)">📋 Notes</button>
   </div>
   <!-- Panel notes de réunion (caché par défaut) -->
   <div id="meeting-notes-panel" style="display:none;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;flex-shrink:0;z-index:9999" class="meeting-notes-responsive">
