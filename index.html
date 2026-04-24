@@ -1987,6 +1987,20 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   _callSeconds = 0;
   const timerBar = document.getElementById('call-timer-bar');
   if (timerBar) timerBar.textContent = '00:00';
+  // Afficher le bouton Notes pour les groupes + auto-créer session si manquante
+  const notesToggle = document.getElementById('meeting-notes-toggle');
+  if (notesToggle) notesToggle.style.display = _currentGroupId ? 'block' : 'none';
+  if (_currentGroupId && !_currentMeetingSession) {
+    _meetingStartTime = Date.now();
+    fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions', {
+      method: 'POST',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ group_id: _currentGroupId, title: currentChat?.name || 'Réunion', agenda: '', started_by: me.id, jitsi_room: roomName, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }] })
+    }).then(r => r.json()).then(data => {
+      _currentMeetingSession = Array.isArray(data) ? data[0] : data;
+      startMeetingNotesPoll();
+    }).catch(() => {});
+  }
   try {
     const JAAS_APP_ID = 'vpaas-magic-cookie-ef45f60a15164dd4a20878febf691844';
     window._jitsiApi = new JitsiMeetExternalAPI('8x8.vc', {
