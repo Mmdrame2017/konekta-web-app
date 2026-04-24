@@ -1602,6 +1602,9 @@ async function uploadAvatar(input) {
 //  CHAT
 // ════════════════════════════════════════════════════════════
 function getChatId(a, b) {
+  // Pour les groupes, utiliser un chat_id fixe basé sur le groupId
+  if (b && b.startsWith('group_')) return b;
+  if (a && a.startsWith('group_')) return a;
   return [a, b].sort().join('_');
 }
 
