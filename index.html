@@ -404,6 +404,22 @@
     .products-grid { grid-template-columns:1fr 1fr!important; }
     .sidebar .tab-btn { width:40px; height:40px; font-size:16px; }
   }
+
+  /* Panel notes mobile : drawer plein écran depuis le bas */
+  @media (max-width: 768px) {
+    .meeting-notes-responsive {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      width: 100% !important;
+      max-height: 70vh !important;
+      border-left: none !important;
+      border-top: 1px solid var(--border) !important;
+      border-radius: 16px 16px 0 0 !important;
+      z-index: 99999 !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -744,7 +760,7 @@
     <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:absolute;top:8px;right:8px;z-index:9999;background:rgba(0,168,132,0.9);color:#fff;border:none;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📋 Notes</button>
   </div>
   <!-- Panel notes de réunion (caché par défaut) -->
-  <div id="meeting-notes-panel" style="display:none;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;flex-shrink:0;z-index:9999">
+  <div id="meeting-notes-panel" style="display:none;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;flex-shrink:0;z-index:9999" class="meeting-notes-responsive">
     <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:13px;font-weight:700;color:var(--text)">📋 Notes de réunion</span>
       <button onclick="toggleMeetingNotes()" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer">✕</button>
@@ -2061,7 +2077,7 @@ function jitsiHangup() {
   stopRingtone();
   clearInterval(_callTimer); _callTimer = null;
   if (_callStatusPoll) { clearInterval(_callStatusPoll); _callStatusPoll = null; }
-  if (_currentMeetingSession) endMeeting();
+  if (_currentMeetingSession && window._jitsiJoined) endMeeting();
   if (window._jitsiApi) { try { window._jitsiApi.executeCommand('hangup'); } catch(e) {} try { window._jitsiApi.dispose(); } catch(e) {} window._jitsiApi = null; }
   document.getElementById('jitsi-container').innerHTML = '';
   document.getElementById('call-overlay').style.display = 'none';
