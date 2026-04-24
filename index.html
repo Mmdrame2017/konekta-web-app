@@ -757,9 +757,9 @@
   <div style="flex:1;position:relative;min-width:0">
     <div id="jitsi-container" style="position:absolute;inset:0"></div>
     <div id="call-timer-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem;z-index:9999;pointer-events:none">00:00</div>
-    <!-- Bouton toggle notes (flottant) -->
-    <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:absolute;top:8px;right:8px;z-index:99999;background:#00A884;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 2px 12px rgba(0,168,132,0.5)">📋 Notes</button>
   </div>
+  <!-- Bouton toggle notes (HORS du conteneur Jitsi, position fixed) -->
+  <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:fixed;top:12px;right:12px;z-index:999999;background:#00A884;color:#fff;border:none;padding:10px 18px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(0,168,132,0.6)">📋 Notes</button>
   <!-- Panel notes de réunion (caché par défaut) -->
   <div id="meeting-notes-panel" style="display:none;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;flex-shrink:0;z-index:9999" class="meeting-notes-responsive">
     <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
@@ -2050,10 +2050,9 @@ function launchJitsiEmbed(roomName, callType, displayName) {
       window._jitsiJoined = true;
       console.log('[JITSI] Conférence rejointe');
     });
-    // Quand un participant rejoint, le mettre en vue principale
+    // Log participant
     window._jitsiApi.addListener('participantJoined', (p) => {
       console.log('[JITSI] Participant rejoint:', p.id, p.displayName);
-      window._jitsiApi.executeCommand('setLargeVideoParticipant', p.id);
     });
     // Quand l'utilisateur raccroche via le bouton Jitsi → toujours fermer
     window._jitsiApi.addListener('readyToClose', () => {
@@ -2619,13 +2618,16 @@ function downloadPV() {
 function sharePVtoChat() {
   if (!window._lastPVHtml || !currentChat) return;
   const chatId = getChatId(me.id, currentChat.userId);
+  const receiverId = currentChat.userId.startsWith('group_') ? me.id : currentChat.userId;
+  const pvText = '📋 PV de réunion : ' + (window._lastPVTitle || 'Réunion') + '\n\n' + window._lastPVHtml.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').substring(0, 800) + '...';
   fetch(SUPA_FB_URL + '/rest/v1/konekta_messages', {
     method: 'POST',
     headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'text', content: '📋 PV de réunion : ' + (window._lastPVTitle || 'Réunion') + '\n\n' + window._lastPVHtml.replace(/<[^>]*>/g, '') .substring(0, 500) + '...' })
-  }).catch(() => {});
-  closeModal('modal-pv-viewer');
-  alert('PV partagé dans le chat !');
+    body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: receiverId, type: 'text', content: pvText })
+  }).then(r => {
+    if (r.ok) { closeModal('modal-pv-viewer'); loadMessages(currentChat); alert('PV partagé dans le chat !'); }
+    else { r.text().then(t => alert('Erreur: ' + t)); }
+  }).catch(e => alert('Erreur: ' + e.message));
 }
 
 // ════════════════════════════════════════════════════════════
