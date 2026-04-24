@@ -2596,6 +2596,8 @@ async function generatePV(sessionId) {
 }
 
 function showPVModal(pvHtml, title) {
+  // Nettoyer le HTML (enlever doctype, html, head, style, body tags)
+  pvHtml = pvHtml.replace(/<!DOCTYPE[^>]*>/gi, '').replace(/<\/?html[^>]*>/gi, '').replace(/<head>[\s\S]*?<\/head>/gi, '').replace(/<\/?body[^>]*>/gi, '').trim();
   document.getElementById('pv-viewer-title').textContent = '📋 ' + title;
   document.getElementById('pv-viewer-content').innerHTML = pvHtml;
   window._lastPVHtml = pvHtml;
