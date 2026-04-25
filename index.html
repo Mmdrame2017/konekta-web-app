@@ -758,10 +758,11 @@
     <div id="jitsi-container" style="position:absolute;inset:0"></div>
     <div id="call-timer-bar" style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem;z-index:9999;pointer-events:none">00:00</div>
   </div>
-  <!-- Bouton toggle notes (HORS du conteneur Jitsi, position fixed) -->
-  <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:fixed;top:12px;right:12px;z-index:999999;background:#00A884;color:#fff;border:none;padding:10px 18px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(0,168,132,0.6)">📋 Notes</button>
-  <!-- Panel notes de réunion (caché par défaut) -->
-  <div id="meeting-notes-panel" style="display:none;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;flex-shrink:0;z-index:9999" class="meeting-notes-responsive">
+</div>
+<!-- Bouton Notes flottant (HORS call-overlay pour z-index indépendant) -->
+<button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;position:fixed;top:12px;right:12px;z-index:100001;background:#00A884;color:#fff;border:none;padding:10px 18px;border-radius:24px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(0,168,132,0.6)">📋 Notes</button>
+<!-- Panel notes de réunion (HORS call-overlay) -->
+<div id="meeting-notes-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:320px;background:var(--bg2);border-left:1px solid var(--border);flex-direction:column;z-index:100002" class="meeting-notes-responsive">
     <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:13px;font-weight:700;color:var(--text)">📋 Notes de réunion</span>
       <button onclick="toggleMeetingNotes()" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer">✕</button>
