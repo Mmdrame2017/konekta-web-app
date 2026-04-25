@@ -791,6 +791,8 @@
       <button onclick="sendMeetingNote()" style="width:36px;height:36px;border-radius:50%;background:var(--primary);border:none;color:#fff;font-size:16px;cursor:pointer;flex-shrink:0">➤</button>
     </div>
     <!-- Transcription toggle -->
+    <!-- Texte intérimaire (ce qui est en train d'être dit) -->
+    <div id="speech-interim" style="padding:4px 12px;font-size:11px;color:var(--warning);font-style:italic;min-height:16px;border-top:1px solid var(--border)"></div>
     <div id="meeting-speech-bar" style="display:none;padding:6px 12px;border-top:1px solid var(--border);display:flex;align-items:center;gap:6px;font-size:11px">
       <span style="width:8px;height:8px;border-radius:50%;background:#E74C3C;animation:pulse 1.5s infinite"></span>
       <span style="color:var(--text2)">Transcription active</span>
@@ -2556,6 +2558,10 @@ function startMeetingNotesPoll() {
 }
 
 // Web Speech API (optionnel, Chrome)
+let _speechLastText = '';
+let _speechRestartTimer = null;
+let _speechBuffer = '';
+
 function startSpeechTranscription() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     alert('Transcription non disponible sur ce navigateur (Chrome requis)');
@@ -2564,30 +2570,82 @@ function startSpeechTranscription() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   _speechRecognition = new SR();
   _speechRecognition.continuous = true;
-  _speechRecognition.interimResults = false;
+  _speechRecognition.interimResults = true;
   _speechRecognition.lang = 'fr-FR';
+  _speechRecognition.maxAlternatives = 1;
+  _speechLastText = '';
+  _speechBuffer = '';
+
   _speechRecognition.onresult = (event) => {
+    let interim = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript.trim();
       if (event.results[i].isFinal) {
-        const text = event.results[i][0].transcript.trim();
-        if (text.length > 5 && _currentMeetingSession) {
-          const elapsed = _meetingStartTime ? Date.now() - _meetingStartTime : 0;
-          fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes', {
-            method: 'POST',
-            headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-            body: JSON.stringify({ session_id: _currentMeetingSession.id, author_id: me.id, author_name: me.name || me.phone, content: text, note_type: 'speech_transcript', timestamp_ms: elapsed })
-          }).catch(() => {});
+        // Éviter les doublons
+        if (transcript === _speechLastText) continue;
+        if (transcript.length <= 3) continue;
+        _speechLastText = transcript;
+        // Accumuler dans un buffer pour regrouper les phrases courtes
+        _speechBuffer += (_speechBuffer ? ' ' : '') + transcript;
+        // Envoyer quand le buffer contient une phrase complète (ponctuation ou > 80 chars)
+        if (_speechBuffer.match(/[.!?]$/) || _speechBuffer.length > 80) {
+          flushSpeechBuffer();
+        } else {
+          // Auto-flush après 3s de silence
+          clearTimeout(_speechRestartTimer);
+          _speechRestartTimer = setTimeout(flushSpeechBuffer, 3000);
         }
+      } else {
+        interim += transcript;
       }
     }
+    // Afficher le texte intérimaire en temps réel
+    const indicator = document.getElementById('speech-interim');
+    if (indicator) indicator.textContent = interim ? '🎙️ ' + interim : '';
   };
-  _speechRecognition.onend = () => { if (_speechRecognition) _speechRecognition.start(); };
+
+  _speechRecognition.onerror = (e) => {
+    console.log('[SPEECH] Erreur:', e.error);
+    if (e.error === 'no-speech' || e.error === 'audio-capture') {
+      // Redémarrer silencieusement
+      setTimeout(() => { if (_speechRecognition) try { _speechRecognition.start(); } catch(e) {} }, 1000);
+    }
+  };
+
+  _speechRecognition.onend = () => {
+    // Flush le buffer restant
+    if (_speechBuffer) flushSpeechBuffer();
+    // Redémarrer automatiquement (toutes les 30s la reco peut s'arrêter)
+    if (_speechRecognition) {
+      setTimeout(() => { if (_speechRecognition) try { _speechRecognition.start(); } catch(e) {} }, 500);
+    }
+  };
+
   _speechRecognition.start();
-  document.getElementById('meeting-speech-bar').style.display = 'flex';
+  const bar = document.getElementById('meeting-speech-bar');
+  if (bar) bar.style.display = 'flex';
+}
+
+function flushSpeechBuffer() {
+  clearTimeout(_speechRestartTimer);
+  if (!_speechBuffer || !_currentMeetingSession) return;
+  const text = _speechBuffer.trim();
+  _speechBuffer = '';
+  if (text.length <= 3) return;
+  const elapsed = _meetingStartTime ? Date.now() - _meetingStartTime : 0;
+  fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes', {
+    method: 'POST',
+    headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ session_id: _currentMeetingSession.id, author_id: me.id, author_name: me.name || me.phone, content: text, note_type: 'speech_transcript', timestamp_ms: elapsed })
+  }).catch(() => {});
 }
 
 function stopSpeechTranscription() {
-  if (_speechRecognition) { _speechRecognition.onend = null; _speechRecognition.stop(); _speechRecognition = null; }
+  if (_speechBuffer) flushSpeechBuffer();
+  clearTimeout(_speechRestartTimer);
+  if (_speechRecognition) { _speechRecognition.onend = null; try { _speechRecognition.stop(); } catch(e) {} _speechRecognition = null; }
+  const interim = document.getElementById('speech-interim');
+  if (interim) interim.textContent = '';
   const bar = document.getElementById('meeting-speech-bar');
   if (bar) bar.style.display = 'none';
 }
