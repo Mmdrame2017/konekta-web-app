@@ -2001,13 +2001,33 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   if (callTopbar) callTopbar.style.display = 'flex';
   if (_currentGroupId && !_currentMeetingSession) {
     _meetingStartTime = Date.now();
-    fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions', {
-      method: 'POST',
-      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify({ group_id: _currentGroupId, title: currentChat?.name || 'Réunion', agenda: '', started_by: me.id, jitsi_room: roomName, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }] })
-    }).then(r => r.json()).then(data => {
-      _currentMeetingSession = Array.isArray(data) ? data[0] : data;
-      startMeetingNotesPoll();
+    // Chercher une session active existante avant d'en créer une nouvelle
+    fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?group_id=eq.' + _currentGroupId + '&status=eq.active&order=created_at.desc&limit=1', {
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+    }).then(r => r.json()).then(existing => {
+      if (Array.isArray(existing) && existing.length > 0) {
+        // Rejoindre la session existante
+        _currentMeetingSession = existing[0];
+        _meetingStartTime = new Date(_currentMeetingSession.started_at).getTime();
+        startMeetingNotesPoll();
+        // Activer la transcription si le créateur l'a activée
+        if (_currentMeetingSession.speech_enabled) startSpeechTranscription();
+        // Afficher l'ordre du jour
+        if (_currentMeetingSession.agenda) {
+          const agendaDiv = document.getElementById('meeting-agenda-display');
+          if (agendaDiv) { agendaDiv.style.display = 'block'; agendaDiv.innerHTML = '<strong>📋 Ordre du jour :</strong><br>' + _currentMeetingSession.agenda.replace(/\n/g, '<br>'); }
+        }
+      } else {
+        // Créer une nouvelle session
+        fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions', {
+          method: 'POST',
+          headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+          body: JSON.stringify({ group_id: _currentGroupId, title: currentChat?.name || 'Réunion', agenda: '', started_by: me.id, jitsi_room: roomName, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }] })
+        }).then(r => r.json()).then(data => {
+          _currentMeetingSession = Array.isArray(data) ? data[0] : data;
+          startMeetingNotesPoll();
+        }).catch(() => {});
+      }
     }).catch(() => {});
   }
   try {
@@ -2439,7 +2459,7 @@ async function startMeeting() {
     // Créer la session de réunion
     const res = await fetch(sbUrl + '/rest/v1/konekta_meeting_sessions', {
       method: 'POST', headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-      body: JSON.stringify({ group_id: _currentGroupId, title, agenda, started_by: me.id, jitsi_room: roomId, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }] })
+      body: JSON.stringify({ group_id: _currentGroupId, title, agenda, started_by: me.id, jitsi_room: roomId, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }], speech_enabled: speechEnabled })
     });
     const data = await res.json();
     _currentMeetingSession = Array.isArray(data) ? data[0] : data;
@@ -2583,20 +2603,26 @@ function endMeeting() {
   if (panel) panel.style.display = 'none';
   const toggle = document.getElementById('meeting-notes-toggle');
   if (toggle) toggle.style.display = 'none';
-  // Marquer la session comme terminée
   if (_currentMeetingSession) {
-    fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?id=eq.' + _currentMeetingSession.id, {
-      method: 'PATCH',
-      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ status: 'ended', ended_at: new Date().toISOString() })
-    }).catch(() => {});
-    // Proposer de générer le PV
-    setTimeout(() => {
-      if (confirm('Réunion terminée. Générer le Procès-Verbal ?')) {
-        generatePV(_currentMeetingSession.id);
-      }
+    const sessionId = _currentMeetingSession.id;
+    const isCreator = _currentMeetingSession.started_by === me.id;
+    if (isCreator) {
+      // Le créateur met fin à la réunion pour tous
+      fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?id=eq.' + sessionId, {
+        method: 'PATCH',
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'ended', ended_at: new Date().toISOString() })
+      }).catch(() => {});
+      setTimeout(() => {
+        if (confirm('Réunion terminée. Générer le Procès-Verbal ?')) {
+          generatePV(sessionId);
+        }
+        _currentMeetingSession = null;
+      }, 500);
+    } else {
+      // Simple participant : quitte sans terminer la réunion
       _currentMeetingSession = null;
-    }, 500);
+    }
   } else {
     _currentMeetingSession = null;
   }
