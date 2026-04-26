@@ -492,10 +492,17 @@
             <h3>Messages</h3>
             <div class="search-box" style="position:relative">
               <span>🔍</span>
-              <input type="text" id="search-phone" placeholder="Nom ou téléphone..." oninput="autoCompleteContact()" onkeydown="if(event.key==='Enter')quickSearchChat()">
+              <input type="text" id="search-phone" placeholder="Nom, téléphone ou groupe..." oninput="autoCompleteContact()" onkeydown="if(event.key==='Enter')quickSearchChat()">
               <button onclick="quickSearchChat()" style="background:var(--primary);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">OK</button>
             </div>
-            <div id="autocomplete-results" style="display:none;position:absolute;left:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:0 0 12px 12px;max-height:200px;overflow-y:auto;z-index:50"></div>
+            <!-- Filtres rapides -->
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <button onclick="filterChatList('all')" id="chat-filter-all" style="flex:1;padding:4px 8px;border:1px solid var(--primary);border-radius:12px;background:var(--primary);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">Tout</button>
+              <button onclick="filterChatList('chat')" id="chat-filter-chat" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:12px;background:var(--bg3);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">💬 Chats</button>
+              <button onclick="filterChatList('groupe')" id="chat-filter-groupe" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:12px;background:var(--bg3);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">👥 Groupes</button>
+              <button onclick="filterChatList('coco')" id="chat-filter-coco" style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:12px;background:var(--bg3);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">🏗️ Co-Co</button>
+            </div>
+            <div id="autocomplete-results" style="display:none;position:absolute;left:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:0 0 12px 12px;max-height:250px;overflow-y:auto;z-index:50"></div>
           </div>
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
           <div style="margin:12px;display:flex;gap:6px;flex-wrap:wrap">
@@ -3039,25 +3046,58 @@ async function autoCompleteContact() {
     try {
       const sbUrl = SUPA_FB_URL;
       const sbKey = SUPA_FB_KEY;
-      // Chercher par nom OU téléphone (ilike pour partial match)
-      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(name.ilike.*' + encodeURIComponent(query) + '*,phone.ilike.*' + encodeURIComponent(query) + '*)&select=id,name,phone,avatar&limit=8', {
-        headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
-      });
+      const headers = { apikey: sbKey, Authorization: 'Bearer ' + sbKey };
+      let html = '';
+      // 1. Chercher les contacts (users)
+      const r = await fetch(sbUrl + '/rest/v1/konekta_users?or=(name.ilike.*' + encodeURIComponent(query) + '*,phone.ilike.*' + encodeURIComponent(query) + '*)&select=id,name,phone,avatar&limit=5', { headers });
       const users = await r.json();
-      if (!Array.isArray(users) || users.length === 0) {
-        resultsDiv.innerHTML = '<div style="padding:12px;color:var(--text2);font-size:13px;text-align:center">Aucun résultat</div>';
-        resultsDiv.style.display = 'block';
-        return;
+      if (Array.isArray(users)) {
+        html += users.filter(u => u.id !== me.id).map(u => {
+          const av = u.avatar ? '<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (u.name||u.phone||'?').charAt(0).toUpperCase();
+          return '<div onclick="selectAutoComplete(\'' + u.id + '\',\'' + (u.name||'').replace(/'/g,'') + '\',\'' + (u.phone||'') + '\',\'' + (u.avatar||'').replace(/'/g,'') + '\')" style="padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s">'
+            + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden">' + av + '</div>'
+            + '<div><div style="font-size:13px;font-weight:600">' + (u.name || 'Sans nom') + '</div><div style="font-size:11px;color:var(--text2)">' + (u.phone || '') + '</div></div></div>';
+        }).join('');
       }
-      resultsDiv.innerHTML = users.filter(u => u.id !== me.id).map(u => `
-        <div onclick="selectAutoComplete('${u.id}','${(u.name||'').replace(/'/g,'')}','${u.phone||''}','${(u.avatar||'').replace(/'/g,'')}')" style="padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s">
-          <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden">${u.avatar ? '<img src="'+u.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (u.name||u.phone||'?').charAt(0).toUpperCase()}</div>
-          <div><div style="font-size:13px;font-weight:600">${u.name || 'Sans nom'}</div><div style="font-size:11px;color:var(--text2)">${u.phone || ''}</div></div>
-        </div>
-      `).join('');
+      // 2. Chercher les groupes
+      const gr = await fetch(sbUrl + '/rest/v1/konekta_groups?name=ilike.*' + encodeURIComponent(query) + '*&select=id,name,avatar,group_type&limit=5', { headers });
+      const groups = await gr.json();
+      if (Array.isArray(groups) && groups.length > 0) {
+        if (html) html += '<div style="padding:6px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;background:var(--bg3)">Groupes & Co-Construction</div>';
+        html += groups.map(g => {
+          const isCoCo = g.group_type === 'coconstruction';
+          const isImg = g.avatar && g.avatar.startsWith('data:');
+          const av = isImg ? '<img src="'+g.avatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (g.avatar || (isCoCo ? '🏗️' : '👥'));
+          const label = isCoCo ? '🏗️ Co-Construction' : '👥 Groupe';
+          return '<div onclick="openGroupChat(\'' + g.id + '\',\'' + (g.name||'').replace(/'/g,'') + '\')" style="padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s">'
+            + '<div style="width:32px;height:32px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0;overflow:hidden">' + av + '</div>'
+            + '<div><div style="font-size:13px;font-weight:600">' + (g.name || 'Groupe') + '</div><div style="font-size:11px;color:var(--text2)">' + label + '</div></div></div>';
+        }).join('');
+      }
+      if (!html) html = '<div style="padding:12px;color:var(--text2);font-size:13px;text-align:center">Aucun résultat</div>';
+      resultsDiv.innerHTML = html;
       resultsDiv.style.display = 'block';
     } catch(e) { resultsDiv.style.display = 'none'; }
   }, 300);
+}
+
+function filterChatList(type) {
+  ['all','chat','groupe','coco'].forEach(t => {
+    const btn = document.getElementById('chat-filter-' + t);
+    if (t === type) { btn.style.background = 'var(--primary)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--primary)'; }
+    else { btn.style.background = 'var(--bg3)'; btn.style.color = 'var(--text2)'; btn.style.borderColor = 'var(--border)'; }
+  });
+  const items = document.querySelectorAll('#chat-items .chat-item');
+  items.forEach(item => {
+    const other = item.dataset.other || '';
+    const isGroup = other.startsWith('grp-');
+    const subtitle = item.querySelector('.chat-item-last')?.textContent || '';
+    const isCoCo = subtitle.includes('Co-Construction');
+    if (type === 'all') { item.style.display = ''; }
+    else if (type === 'chat') { item.style.display = isGroup ? 'none' : ''; }
+    else if (type === 'groupe') { item.style.display = (isGroup && !isCoCo) ? '' : 'none'; }
+    else if (type === 'coco') { item.style.display = (isGroup && isCoCo) ? '' : 'none'; }
+  });
 }
 
 function selectAutoComplete(userId, name, phone, avatar) {
