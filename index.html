@@ -498,8 +498,9 @@
             <div id="autocomplete-results" style="display:none;position:absolute;left:16px;right:16px;background:var(--card);border:1px solid var(--border);border-radius:0 0 12px 12px;max-height:200px;overflow-y:auto;z-index:50"></div>
           </div>
           <div class="chat-items scrollbar-custom" id="chat-items"></div>
-          <div style="margin:12px;display:flex;gap:8px">
-            <button class="new-chat-btn" onclick="openNewChatModal()" style="flex:1;margin:0">+ Conversation</button>
+          <div style="margin:12px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="new-chat-btn" onclick="openNewChatModal()" style="flex:1;margin:0;min-width:80px">+ Chat</button>
+            <button class="new-chat-btn" onclick="openNewStandardGroupModal()" style="flex:1;margin:0;min-width:80px;background:var(--primary)">👥 Groupe</button>
             <button class="new-chat-btn" onclick="openNewGroupModal()" style="flex:1;margin:0;background:var(--wave);position:relative" onmouseenter="document.getElementById('coconstruction-tooltip').style.display='block'" onmouseleave="document.getElementById('coconstruction-tooltip').style.display='none'">🏗️ Co-Construction
               <div id="coconstruction-tooltip" style="display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;width:280px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:200;text-align:left;font-size:12px;line-height:1.7;font-weight:400;color:var(--text);pointer-events:none">
                 <div style='font-weight:700;margin-bottom:6px;color:var(--primary);font-size:13px'>Comment ça marche ?</div>
@@ -748,6 +749,33 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-new-group')">Annuler</button>
       <button class="btn btn-primary" onclick="createGroup()" id="create-group-btn" style="background:var(--wave)">Créer l'espace</button>
+    </div>
+  </div>
+</div>
+
+<!-- Standard Group Modal -->
+<div class="modal-overlay" id="modal-new-std-group">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>👥 Créer un groupe</h3>
+      <button class="close-btn" onclick="closeModal('modal-new-std-group')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nom du groupe *</label>
+      <input type="text" id="std-group-name" placeholder="Ex: Famille, Amis, Collègues...">
+    </div>
+    <div class="form-group">
+      <label>Ajouter des membres (numéros séparés par virgule)</label>
+      <textarea id="std-group-members" placeholder="Ex: 77 123 45 67, 78 234 56 78" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;min-height:60px;resize:vertical"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Emoji du groupe</label>
+      <input type="text" id="std-group-emoji" value="👥" maxlength="4" style="width:60px;text-align:center;font-size:24px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+    </div>
+    <p class="msg" id="std-group-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-new-std-group')">Annuler</button>
+      <button class="btn btn-primary" onclick="createStandardGroup()" id="create-std-group-btn">Créer le groupe</button>
     </div>
   </div>
 </div>
@@ -1675,7 +1703,7 @@ async function loadChats() {
     }).join('');
     // Charger les groupes
     try {
-      const grpR = await fetch(SUPA_FB_URL + '/rest/v1/konekta_group_members?user_id=eq.' + myId + '&select=group_id,konekta_groups(id,name,avatar,description)', { headers: sbH });
+      const grpR = await fetch(SUPA_FB_URL + '/rest/v1/konekta_group_members?user_id=eq.' + myId + '&select=group_id,konekta_groups(id,name,avatar,description,group_type)', { headers: sbH });
       const grpRows = await grpR.json();
       if (Array.isArray(grpRows)) {
         window._groupCache = window._groupCache || {};
@@ -1688,7 +1716,7 @@ async function loadChats() {
             : (grp.avatar || '👥');
           return '<div class="chat-item" onclick="openGroupChat(\'' + grp.id + '\',\'' + (grp.name||'').replace(/'/g,'') + '\')" data-other="grp-' + grp.id + '">'
             + '<div class="chat-avatar" style="overflow:hidden">' + avatarHtml + '</div>'
-            + '<div class="chat-item-info"><div class="chat-item-name">' + (grp.name || 'Co-Construction') + '</div><div class="chat-item-last">Groupe</div></div></div>';
+            + '<div class="chat-item-info"><div class="chat-item-name">' + (grp.name || 'Groupe') + '</div><div class="chat-item-last">' + (grp.group_type === 'coconstruction' ? '🏗️ Co-Construction' : '👥 Groupe') + '</div></div></div>';
         }).join('');
         el.innerHTML = el.innerHTML + groupsHtml;
       }
@@ -1701,7 +1729,9 @@ function openGroupChat(groupId, name) {
   _currentGroupId = groupId;
   const cached = (window._groupCache || {})[groupId];
   const avatar = cached && cached.avatar && cached.avatar.startsWith('data:') ? cached.avatar : '';
-  openChat({ userId: 'group_' + groupId, name: name, phone: 'Co-Construction', avatar: avatar, isGroup: true, groupId: groupId });
+  const groupType = cached?.group_type || 'standard';
+  const isCoCo = groupType === 'coconstruction';
+  openChat({ userId: 'group_' + groupId, name: name, phone: isCoCo ? 'Co-Construction' : 'Groupe', avatar: avatar, isGroup: true, groupId: groupId, groupType: groupType });
 }
 
 async function openGroupInfo() {
@@ -1973,8 +2003,8 @@ function stopRingtone() {
 async function startCall(type) {
   if (!currentChat) return;
   _currentCallType = type;
-  // Si c'est un groupe → afficher le modal pré-réunion
-  if (currentChat.isGroup && _currentGroupId) {
+  // Si c'est un groupe Co-Construction → afficher le modal pré-réunion
+  if (currentChat.isGroup && _currentGroupId && currentChat.groupType === 'coconstruction') {
     document.getElementById('meeting-title').value = '';
     document.getElementById('meeting-agenda').value = '';
     document.getElementById('meeting-call-type').value = type;
@@ -1998,10 +2028,11 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   if (timerBar) timerBar.textContent = '00:00';
   // Afficher le bouton Notes pour les groupes + auto-créer session si manquante
   const notesToggle = document.getElementById('meeting-notes-toggle');
-  if (notesToggle) notesToggle.style.display = _currentGroupId ? 'inline-block' : 'none';
+  const isCoCo = _currentGroupId && currentChat?.groupType === 'coconstruction';
+  if (notesToggle) notesToggle.style.display = isCoCo ? 'inline-block' : 'none';
   const callTopbar = document.getElementById('call-topbar');
   if (callTopbar) callTopbar.style.display = 'flex';
-  if (_currentGroupId && !_currentMeetingSession) {
+  if (isCoCo && !_currentMeetingSession) {
     _meetingStartTime = Date.now();
     // Chercher une session active existante avant d'en créer une nouvelle
     fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_sessions?group_id=eq.' + _currentGroupId + '&status=eq.active&order=created_at.desc&limit=1', {
@@ -2883,6 +2914,54 @@ function onFileAttached(input) {
 // ════════════════════════════════════════════════════════════
 //  GROUPES
 // ════════════════════════════════════════════════════════════
+function openNewStandardGroupModal() {
+  document.getElementById('std-group-name').value = '';
+  document.getElementById('std-group-members').value = '';
+  document.getElementById('std-group-emoji').value = '👥';
+  document.getElementById('std-group-msg').textContent = '';
+  openModal('modal-new-std-group');
+}
+
+async function createStandardGroup() {
+  const name = document.getElementById('std-group-name').value.trim();
+  const members = document.getElementById('std-group-members').value.trim();
+  const emoji = document.getElementById('std-group-emoji').value.trim() || '👥';
+  if (!name) { showMsg('std-group-msg', 'Nom du groupe requis', 'error'); return; }
+  const btn = document.getElementById('create-std-group-btn');
+  btn.disabled = true; btn.textContent = 'Création...';
+  try {
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    const sbH = { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json' };
+    // Créer le groupe avec group_type = 'standard'
+    const grpRes = await fetch(sbUrl + '/rest/v1/konekta_groups', {
+      method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
+      body: JSON.stringify({ name, avatar: emoji, created_by: me.id, group_type: 'standard' })
+    });
+    const grpData = await grpRes.json();
+    const groupId = Array.isArray(grpData) ? grpData[0].id : grpData.id;
+    // Ajouter le créateur + membres
+    const membersList = [{ group_id: groupId, user_id: me.id, role: 'admin' }];
+    const phones = members.split(',').map(m => m.replace(/\s/g, '')).filter(Boolean);
+    for (const ph of phones) {
+      const last9 = ph.replace(/\D/g, '').slice(-9);
+      try {
+        const r = await fetch(sbUrl + '/rest/v1/konekta_users?phone=like.*' + last9 + '&select=id&limit=1', { headers: sbH });
+        const rows = await r.json();
+        if (Array.isArray(rows) && rows.length > 0 && rows[0].id !== me.id) {
+          membersList.push({ group_id: groupId, user_id: rows[0].id, role: 'member' });
+        }
+      } catch(e2) {}
+    }
+    await fetch(sbUrl + '/rest/v1/konekta_group_members', {
+      method: 'POST', headers: { ...sbH, Prefer: 'return=minimal' },
+      body: JSON.stringify(membersList)
+    });
+    closeModal('modal-new-std-group');
+    loadChats();
+  } catch(e) { showMsg('std-group-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Créer le groupe';
+}
+
 function openNewGroupModal() {
   document.getElementById('group-name').value = '';
   document.getElementById('group-desc').value = '';
@@ -2906,7 +2985,7 @@ async function createGroup() {
     // 1. Créer le groupe
     const grpRes = await fetch(sbUrl + '/rest/v1/konekta_groups', {
       method: 'POST', headers: { ...sbH, Prefer: 'return=representation' },
-      body: JSON.stringify({ name, description: desc || null, avatar: emoji, created_by: me.id })
+      body: JSON.stringify({ name, description: desc || null, avatar: emoji, created_by: me.id, group_type: 'coconstruction' })
     });
     const grpData = await grpRes.json();
     const groupId = Array.isArray(grpData) ? grpData[0].id : grpData.id;
@@ -3131,7 +3210,11 @@ function openChat(contact) {
       <div class="chat-header-actions">
         <button class="icon-btn" onclick="startCall('audio')" title="Appel vocal">📞</button>
         <button class="icon-btn" onclick="startCall('video')" title="Appel vidéo">📹</button>
-        ${contact.isGroup ? '<button class="icon-btn" onclick="startScreenShare()" title="Partage d\'écran" style="font-size:14px">🖥️</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>' : '<button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
+        ${contact.isGroup
+          ? (contact.groupType === 'coconstruction'
+            ? '<button class="icon-btn" onclick="startScreenShare()" title="Partage d\'écran" style="font-size:14px">🖥️</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>'
+            : '<button class="icon-btn" onclick="openPaymentModal()" title="Paiement">💳</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>')
+          : '<button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
       </div>
     </div>
     <div class="messages-area scrollbar-custom" id="messages-area"></div>
