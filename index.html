@@ -457,6 +457,8 @@
 
 <!-- ════════════════════════════════════════ APP ════════════════════════════════════════ -->
 <div id="app">
+  <!-- Bandeau réunion imminente -->
+  <div id="upcoming-meeting-banner" style="display:none;background:linear-gradient(135deg,#005C4B,#00A884);padding:10px 16px;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;font-size:13px;color:#fff"></div>
   <!-- TOP BAR -->
   <div class="topbar">
     <div style="display:flex;align-items:center;gap:10px">
@@ -1125,6 +1127,59 @@
   </div>
 </div>
 
+<!-- Schedule Meeting Modal -->
+<div class="modal-overlay" id="modal-schedule-meeting">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>📅 Planifier une réunion</h3>
+      <button class="close-btn" onclick="closeModal('modal-schedule-meeting')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Titre *</label>
+      <input type="text" id="sched-title" placeholder="Ex: Sprint Planning #13">
+    </div>
+    <div class="form-group">
+      <label>Date et heure *</label>
+      <input type="datetime-local" id="sched-datetime" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <div class="form-group" style="flex:1;margin-bottom:0">
+        <label>Durée</label>
+        <select id="sched-duration" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+          <option value="15">15 min</option>
+          <option value="30">30 min</option>
+          <option value="60" selected>1 heure</option>
+          <option value="90">1h30</option>
+          <option value="120">2 heures</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;margin-bottom:0">
+        <label>Récurrence</label>
+        <select id="sched-recurrence" onchange="document.getElementById('sched-recurrence-end-group').style.display=this.value==='none'?'none':'block'" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+          <option value="none">Aucune</option>
+          <option value="daily">Quotidienne</option>
+          <option value="weekly">Hebdomadaire</option>
+          <option value="biweekly">Bihebdomadaire</option>
+          <option value="monthly">Mensuelle</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" id="sched-recurrence-end-group" style="display:none">
+      <label>Fin de récurrence</label>
+      <input type="date" id="sched-recurrence-end" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+    </div>
+    <div class="form-group">
+      <label>Ordre du jour</label>
+      <textarea id="sched-agenda" placeholder="Points à aborder..." style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit;min-height:60px;resize:vertical"></textarea>
+    </div>
+    <p class="msg" id="sched-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-schedule-meeting')">Annuler</button>
+      <button class="btn btn-primary" onclick="scheduleMeeting()" id="sched-btn">📅 Planifier</button>
+    </div>
+  </div>
+</div>
+
 <!-- PV Viewer Modal -->
 <div class="modal-overlay" id="modal-pv-viewer">
   <div class="modal" style="max-width:700px;max-height:85vh">
@@ -1327,6 +1382,7 @@ function showApp() {
   handleKonektaPaymentReturn();
   // Écouter les appels entrants
   startIncomingCallPoll();
+  startUpcomingMeetingPoll();
 }
 
 async function handleKonektaPaymentReturn() {
@@ -2480,6 +2536,124 @@ async function viewMeetingPV(sessionId) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  PLANIFICATION DE RÉUNIONS
+// ════════════════════════════════════════════════════════════
+
+function openScheduleMeetingModal() {
+  if (!_currentGroupId) return;
+  document.getElementById('sched-title').value = '';
+  document.getElementById('sched-agenda').value = '';
+  document.getElementById('sched-recurrence').value = 'none';
+  document.getElementById('sched-duration').value = '60';
+  document.getElementById('sched-recurrence-end-group').style.display = 'none';
+  document.getElementById('sched-msg').textContent = '';
+  // Pré-remplir la date/heure avec demain à 10h
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(10, 0, 0, 0);
+  document.getElementById('sched-datetime').value = tomorrow.toISOString().slice(0, 16);
+  openModal('modal-schedule-meeting');
+}
+
+async function scheduleMeeting() {
+  const title = document.getElementById('sched-title').value.trim();
+  const datetime = document.getElementById('sched-datetime').value;
+  const duration = parseInt(document.getElementById('sched-duration').value);
+  const recurrence = document.getElementById('sched-recurrence').value;
+  const recurrenceEnd = document.getElementById('sched-recurrence-end').value || null;
+  const agenda = document.getElementById('sched-agenda').value.trim();
+  if (!title) { showMsg('sched-msg', 'Titre requis', 'error'); return; }
+  if (!datetime) { showMsg('sched-msg', 'Date et heure requises', 'error'); return; }
+  if (new Date(datetime) < new Date()) { showMsg('sched-msg', 'La date doit être dans le futur', 'error'); return; }
+  const btn = document.getElementById('sched-btn');
+  btn.disabled = true; btn.textContent = 'Planification...';
+  try {
+    const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    const roomId = 'konekta-grp-' + _currentGroupId.slice(0, 20) + '-' + Date.now().toString(36);
+    // Récupérer les membres du groupe
+    const mr = await fetch(sbUrl + '/rest/v1/konekta_group_members?group_id=eq.' + _currentGroupId + '&select=user_id', {
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+    });
+    const members = await mr.json();
+    const participantIds = Array.isArray(members) ? members.map(m => m.user_id) : [me.id];
+    // Créer la réunion planifiée
+    const res = await fetch(sbUrl + '/rest/v1/konekta_scheduled_meetings', {
+      method: 'POST', headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+      body: JSON.stringify({ group_id: _currentGroupId, title, agenda, scheduled_at: new Date(datetime).toISOString(), duration_min: duration, recurrence, recurrence_end: recurrenceEnd, created_by: me.id, jitsi_room: roomId, participants: participantIds })
+    });
+    const data = await res.json();
+    // Envoyer un message dans le chat du groupe
+    const chatId = getChatId(me.id, currentChat.userId);
+    const dateStr = new Date(datetime).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const heureStr = new Date(datetime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const recLabel = { none: '', daily: ' (récurrent: quotidien)', weekly: ' (récurrent: hebdo)', biweekly: ' (récurrent: bihebdo)', monthly: ' (récurrent: mensuel)' };
+    const msgContent = '📅 Réunion planifiée : ' + title + '\\n📆 ' + dateStr + ' à ' + heureStr + '\\n⏱️ Durée : ' + duration + ' min' + (recLabel[recurrence] || '') + (agenda ? '\\n📋 ' + agenda : '');
+    await fetch(sbUrl + '/rest/v1/konekta_messages', {
+      method: 'POST', headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: me.id, type: 'text', content: msgContent })
+    });
+    // Notifier via n8n (email + Google Calendar)
+    try {
+      await fetch('https://n8n.srv1424726.hstgr.cloud/webhook/schedule-meeting-notify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting_id: Array.isArray(data) ? data[0].id : data.id, group_id: _currentGroupId, title, datetime: new Date(datetime).toISOString(), duration_min: duration, agenda, recurrence, participants: participantIds })
+      });
+    } catch(e) { console.log('[SCHEDULE] Notification webhook failed:', e.message); }
+    closeModal('modal-schedule-meeting');
+    if (currentChat) loadMessages(currentChat);
+  } catch(e) { showMsg('sched-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = '📅 Planifier';
+}
+
+// Vérifier les réunions imminentes (polling toutes les 30s)
+let _upcomingMeetingPoll = null;
+function startUpcomingMeetingPoll() {
+  if (_upcomingMeetingPoll) return;
+  _upcomingMeetingPoll = setInterval(checkUpcomingMeetings, 30000);
+  checkUpcomingMeetings();
+}
+
+async function checkUpcomingMeetings() {
+  if (!me || !me.id) return;
+  try {
+    const now = new Date().toISOString();
+    const soon = new Date(Date.now() + 10 * 60000).toISOString(); // 10 min
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_scheduled_meetings?status=eq.scheduled&scheduled_at=gte.' + now + '&scheduled_at=lte.' + soon + '&select=id,title,scheduled_at,group_id,jitsi_room', {
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+    });
+    const meetings = await r.json();
+    const banner = document.getElementById('upcoming-meeting-banner');
+    if (!banner) return;
+    if (Array.isArray(meetings) && meetings.length > 0) {
+      const m = meetings[0];
+      const minutesLeft = Math.max(0, Math.round((new Date(m.scheduled_at) - Date.now()) / 60000));
+      banner.innerHTML = '<span>📅 <strong>' + escHtml(m.title) + '</strong> dans ' + minutesLeft + ' min</span><button onclick="joinScheduledMeeting(\'' + m.id + '\',\'' + m.group_id + '\',\'' + (m.jitsi_room||'') + '\',\'' + escHtml(m.title).replace(/'/g,'') + '\')" style="background:#00A884;color:#fff;border:none;padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Rejoindre</button>';
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+async function joinScheduledMeeting(meetingId, groupId, jitsiRoom, title) {
+  // Marquer comme started
+  await fetch(SUPA_FB_URL + '/rest/v1/konekta_scheduled_meetings?id=eq.' + meetingId, {
+    method: 'PATCH', headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({ status: 'started' })
+  }).catch(() => {});
+  // Ouvrir le groupe et lancer la réunion
+  _currentGroupId = groupId;
+  const cached = (window._groupCache || {})[groupId];
+  openChat({ userId: 'group_' + groupId, name: cached?.name || title, phone: 'Co-Construction', avatar: cached?.avatar || '', isGroup: true, groupId: groupId, groupType: 'coconstruction' });
+  setTimeout(() => {
+    document.getElementById('meeting-title').value = title;
+    document.getElementById('meeting-agenda').value = '';
+    document.getElementById('meeting-call-type').value = 'video';
+    startMeeting();
+  }, 500);
+}
+
+// ════════════════════════════════════════════════════════════
 //  RÉUNIONS CO-CONSTRUCTION
 // ════════════════════════════════════════════════════════════
 let _currentMeetingSession = null;
@@ -3256,7 +3430,7 @@ function openChat(contact) {
         <button class="icon-btn" onclick="startCall('video')" title="Appel vidéo">📹</button>
         ${contact.isGroup
           ? (contact.groupType === 'coconstruction'
-            ? '<button class="icon-btn" onclick="startScreenShare()" title="Partage d\'écran" style="font-size:14px">🖥️</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>'
+            ? '<button class="icon-btn" onclick="openScheduleMeetingModal()" title="Planifier" style="font-size:14px">📅</button><button class="icon-btn" onclick="startScreenShare()" title="Partage d\'écran" style="font-size:14px">🖥️</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>'
             : '<button class="icon-btn" onclick="openPaymentModal()" title="Paiement">💳</button><button class="icon-btn" onclick="openGroupInfo()" title="Info groupe">ℹ️</button>')
           : '<button class="icon-btn" onclick="openPaymentModal()" title="Envoyer de l\'argent">💳</button>'}
       </div>
