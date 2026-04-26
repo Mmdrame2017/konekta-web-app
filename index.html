@@ -820,6 +820,24 @@
   <div id="call-topbar" style="display:none;position:relative;z-index:2;background:#111B21;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div id="call-timer-bar" style="background:rgba(0,0,0,0.4);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem">00:00</div>
     <div style="display:flex;gap:6px">
+      <!-- Sélecteur de langue pour TOUS les participants -->
+      <select id="call-language-select" onchange="onCallLanguageChanged(this.value)" style="display:none;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:12px;padding:4px 8px;font-size:11px;font-family:inherit;cursor:pointer">
+        <option value="fr" style="color:#000">🇫🇷 FR</option>
+        <option value="en" style="color:#000">🇬🇧 EN</option>
+        <option value="ar" style="color:#000">🇸🇦 AR</option>
+        <option value="es" style="color:#000">🇪🇸 ES</option>
+        <option value="pt" style="color:#000">🇵🇹 PT</option>
+        <option value="wo" style="color:#000">🇸🇳 WO</option>
+        <option value="zh" style="color:#000">🇨🇳 ZH</option>
+        <option value="de" style="color:#000">🇩🇪 DE</option>
+        <option value="it" style="color:#000">🇮🇹 IT</option>
+        <option value="tr" style="color:#000">🇹🇷 TR</option>
+        <option value="ru" style="color:#000">🇷🇺 RU</option>
+        <option value="ja" style="color:#000">🇯🇵 JA</option>
+        <option value="ko" style="color:#000">🇰🇷 KO</option>
+        <option value="hi" style="color:#000">🇮🇳 HI</option>
+        <option value="sw" style="color:#000">🇰🇪 SW</option>
+      </select>
       <button id="meeting-tts-toggle" onclick="toggleTranslationTTS()" style="display:none;background:rgba(255,255,255,0.15);color:#fff;border:none;padding:6px 10px;border-radius:16px;font-size:12px;cursor:pointer;font-family:inherit" title="Traduction vocale">🔇</button>
       <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;background:#00A884;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Notes</button>
     </div>
@@ -2171,7 +2189,16 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         _meetingStartTime = new Date(_currentMeetingSession.started_at).getTime();
         startMeetingNotesPoll();
         // Activer la transcription si le créateur l'a activée
-        if (_currentMeetingSession.speech_enabled) startSpeechTranscription();
+        if (_currentMeetingSession.speech_enabled) {
+          startSpeechTranscription();
+          _translationEnabled = true;
+          // Afficher le sélecteur de langue pour ce participant
+          const langSelect = document.getElementById('call-language-select');
+          if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
+          const ttsBtn = document.getElementById('meeting-tts-toggle');
+          if (ttsBtn) ttsBtn.style.display = 'inline-block';
+          setTimeout(enhanceNotesPollWithTranslation, 2000);
+        }
         // Afficher l'ordre du jour
         if (_currentMeetingSession.agenda) {
           const agendaDiv = document.getElementById('meeting-agenda-display');
@@ -2605,6 +2632,23 @@ let _ttsEnabled = false;
 let _lastSubtitleId = null;
 let _translationCache = {};
 
+function onCallLanguageChanged(lang) {
+  _myLanguage = lang;
+  _mySpeechLang = lang === 'wo' ? 'wo' : lang + '-' + lang.toUpperCase();
+  _translationEnabled = true;
+  localStorage.setItem('knk_lang', lang);
+  // Redémarrer la transcription avec la nouvelle langue si active
+  if (_speechRecognition) {
+    stopSpeechTranscription();
+    setTimeout(startSpeechTranscription, 500);
+  }
+  // Activer le polling traduction
+  enhanceNotesPollWithTranslation();
+  // Afficher le bouton TTS
+  const ttsBtn = document.getElementById('meeting-tts-toggle');
+  if (ttsBtn) ttsBtn.style.display = 'inline-block';
+}
+
 function savePreferredLanguage(lang) {
   _myLanguage = lang;
   localStorage.setItem('knk_lang', lang);
@@ -2877,7 +2921,9 @@ async function startMeeting() {
     _translationEnabled = document.getElementById('meeting-translation-enabled').checked;
     if (speechEnabled) startSpeechTranscription();
     // Activer traduction dans le polling
-    if (_translationEnabled) {
+    if (_translationEnabled || speechEnabled) {
+      const langSelect = document.getElementById('call-language-select');
+      if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
       setTimeout(enhanceNotesPollWithTranslation, 2000);
       const ttsBtn = document.getElementById('meeting-tts-toggle');
       if (ttsBtn) ttsBtn.style.display = 'inline-block';
