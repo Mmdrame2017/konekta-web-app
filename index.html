@@ -631,6 +631,31 @@
             </div>
             <span class="profile-row-arrow">›</span>
           </div>
+          <div class="profile-row">
+            <div class="profile-row-left">
+              <span class="profile-row-icon">🌐</span>
+              <div>
+                <div class="profile-row-label">Langue préférée</div>
+                <select id="profile-language" onchange="savePreferredLanguage(this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:12px;font-family:inherit;margin-top:4px">
+                  <option value="fr">🇫🇷 Français</option>
+                  <option value="en">🇬🇧 English</option>
+                  <option value="ar">🇸🇦 العربية</option>
+                  <option value="es">🇪🇸 Español</option>
+                  <option value="pt">🇵🇹 Português</option>
+                  <option value="wo">🇸🇳 Wolof</option>
+                  <option value="zh">🇨🇳 中文</option>
+                  <option value="de">🇩🇪 Deutsch</option>
+                  <option value="it">🇮🇹 Italiano</option>
+                  <option value="tr">🇹🇷 Türkçe</option>
+                  <option value="ru">🇷🇺 Русский</option>
+                  <option value="ja">🇯🇵 日本語</option>
+                  <option value="ko">🇰🇷 한국어</option>
+                  <option value="hi">🇮🇳 हिन्दी</option>
+                  <option value="sw">🇰🇪 Kiswahili</option>
+                </select>
+              </div>
+            </div>
+          </div>
           <div class="profile-row" onclick="openEditWaveModal()">
             <div class="profile-row-left">
               <span class="profile-row-icon">🌊</span>
@@ -794,7 +819,15 @@
   <!-- Barre supérieure avec timer + bouton Notes -->
   <div id="call-topbar" style="display:none;position:relative;z-index:2;background:#111B21;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div id="call-timer-bar" style="background:rgba(0,0,0,0.4);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem">00:00</div>
-    <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;background:#00A884;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Notes</button>
+    <div style="display:flex;gap:6px">
+      <button id="meeting-tts-toggle" onclick="toggleTranslationTTS()" style="display:none;background:rgba(255,255,255,0.15);color:#fff;border:none;padding:6px 10px;border-radius:16px;font-size:12px;cursor:pointer;font-family:inherit" title="Traduction vocale">🔇</button>
+      <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;background:#00A884;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Notes</button>
+    </div>
+  </div>
+  <!-- Bandeau sous-titres traduits -->
+  <div id="subtitle-banner" style="display:none;background:rgba(0,0,0,0.85);padding:8px 16px;text-align:center;color:#fff;font-size:14px;line-height:1.4;max-height:60px;overflow:hidden;flex-shrink:0;z-index:2">
+    <div id="subtitle-original" style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:2px"></div>
+    <div id="subtitle-translated" style="font-weight:600"></div>
   </div>
   <!-- Jitsi -->
   <div style="flex:1;position:relative;min-width:0">
@@ -1111,6 +1144,29 @@
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)">
         <input type="checkbox" id="meeting-speech-enabled"> 🎙️ Transcription auto <span style="font-size:10px;background:var(--bg3);padding:1px 6px;border-radius:8px">Chrome</span>
       </label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+        <input type="checkbox" id="meeting-translation-enabled"> 🌐 Traduction en temps réel
+      </label>
+    </div>
+    <div class="form-group">
+      <label>Ma langue de parole</label>
+      <select id="meeting-my-language" style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:14px;font-family:inherit">
+        <option value="fr-FR">🇫🇷 Français</option>
+        <option value="en-US">🇬🇧 English</option>
+        <option value="ar-SA">🇸🇦 العربية</option>
+        <option value="es-ES">🇪🇸 Español</option>
+        <option value="pt-PT">🇵🇹 Português</option>
+        <option value="wo">🇸🇳 Wolof</option>
+        <option value="zh-CN">🇨🇳 中文</option>
+        <option value="de-DE">🇩🇪 Deutsch</option>
+        <option value="it-IT">🇮🇹 Italiano</option>
+        <option value="tr-TR">🇹🇷 Türkçe</option>
+        <option value="ru-RU">🇷🇺 Русский</option>
+        <option value="ja-JP">🇯🇵 日本語</option>
+        <option value="ko-KR">🇰🇷 한국어</option>
+        <option value="hi-IN">🇮🇳 हिन्दी</option>
+        <option value="sw-KE">🇰🇪 Kiswahili</option>
+      </select>
     </div>
     <div class="form-group">
       <label>Type d'appel</label>
@@ -1491,6 +1547,10 @@ async function loadProfile() {
   if (profName) profName.textContent = me.name || me.phone || '(sans nom)';
   if (profPhone) profPhone.textContent = me.phone || '—';
   if (waveDisplay) waveDisplay.textContent = me.wave_phone || 'Non configuré';
+  // Langue préférée
+  _myLanguage = me.preferred_language || localStorage.getItem('knk_lang') || 'fr';
+  const langSelect = document.getElementById('profile-language');
+  if (langSelect) langSelect.value = _myLanguage;
   const debugEl = document.getElementById('debug-id');
   if (debugEl) debugEl.textContent = 'ID: ' + (me.id || 'UNDEFINED') + ' | Phone: ' + (me.phone || 'NONE');
   loadSolde();
@@ -2536,6 +2596,117 @@ async function viewMeetingPV(sessionId) {
 }
 
 // ════════════════════════════════════════════════════════════
+//  TRADUCTION EN TEMPS RÉEL
+// ════════════════════════════════════════════════════════════
+let _myLanguage = localStorage.getItem('knk_lang') || 'fr';
+let _mySpeechLang = 'fr-FR';
+let _translationEnabled = false;
+let _ttsEnabled = false;
+let _lastSubtitleId = null;
+let _translationCache = {};
+
+function savePreferredLanguage(lang) {
+  _myLanguage = lang;
+  localStorage.setItem('knk_lang', lang);
+  // Sauvegarder dans Supabase
+  if (me && me.id) {
+    fetch(SUPA_FB_URL + '/rest/v1/konekta_users?id=eq.' + me.id, {
+      method: 'PATCH',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ preferred_language: lang })
+    }).catch(() => {});
+    me.preferred_language = lang;
+    localStorage.setItem('knk_user', JSON.stringify(me));
+  }
+}
+
+async function translateText(text, sourceLang, targetLang) {
+  if (!text || sourceLang === targetLang) return text;
+  const key = sourceLang + '|' + targetLang + ':' + text.substring(0, 50);
+  if (_translationCache[key]) return _translationCache[key];
+  try {
+    const r = await fetch('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text.substring(0, 500)) + '&langpair=' + sourceLang + '|' + targetLang);
+    const data = await r.json();
+    const translated = data.responseData?.translatedText || text;
+    _translationCache[key] = translated;
+    return translated;
+  } catch(e) { return text; }
+}
+
+function showSubtitle(originalText, translatedText, authorName) {
+  const banner = document.getElementById('subtitle-banner');
+  const origEl = document.getElementById('subtitle-original');
+  const transEl = document.getElementById('subtitle-translated');
+  if (!banner) return;
+  origEl.textContent = (authorName || '') + ': ' + originalText;
+  transEl.textContent = translatedText;
+  banner.style.display = 'block';
+  // Auto-hide après 8s
+  clearTimeout(window._subtitleTimer);
+  window._subtitleTimer = setTimeout(() => { banner.style.display = 'none'; }, 8000);
+}
+
+function toggleTranslationTTS() {
+  _ttsEnabled = !_ttsEnabled;
+  const btn = document.getElementById('meeting-tts-toggle');
+  if (btn) {
+    btn.textContent = _ttsEnabled ? '🔊' : '🔇';
+    btn.style.background = _ttsEnabled ? '#00A884' : 'rgba(255,255,255,0.15)';
+  }
+}
+
+function speakTranslation(text, lang) {
+  if (!_ttsEnabled || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = lang === 'fr' ? 'fr-FR' : lang === 'en' ? 'en-US' : lang === 'ar' ? 'ar-SA' : lang === 'es' ? 'es-ES' : lang + '-' + lang.toUpperCase();
+  utterance.rate = 1.0;
+  utterance.volume = 0.8;
+  window.speechSynthesis.speak(utterance);
+}
+
+// Surcharge du polling notes pour traduction
+function enhanceNotesPollWithTranslation() {
+  if (!_meetingNotesPoll) return;
+  clearInterval(_meetingNotesPoll);
+  let lastCount = 0;
+  _meetingNotesPoll = setInterval(async () => {
+    if (!_currentMeetingSession) { clearInterval(_meetingNotesPoll); return; }
+    try {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes?session_id=eq.' + _currentMeetingSession.id + '&order=created_at.asc&select=*', {
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+      });
+      const notes = await r.json();
+      if (Array.isArray(notes) && notes.length !== lastCount) {
+        const newNotes = notes.slice(lastCount);
+        lastCount = notes.length;
+        const list = document.getElementById('meeting-notes-list');
+        if (list && newNotes.length < 20) {
+          // Ajouter seulement les nouvelles notes
+          for (const n of newNotes) { appendMeetingNoteUI(n); }
+        } else if (list) {
+          list.innerHTML = '';
+          notes.forEach(n => appendMeetingNoteUI(n));
+        }
+        // Traduire et afficher les sous-titres pour les notes d'AUTRES participants
+        if (_translationEnabled) {
+          for (const n of newNotes) {
+            if (n.note_type === 'speech_transcript' && n.author_id !== me.id && n.id !== _lastSubtitleId) {
+              _lastSubtitleId = n.id;
+              const sourceLang = n.source_lang || 'fr';
+              const targetLang = _myLanguage;
+              const translated = await translateText(n.content, sourceLang, targetLang);
+              showSubtitle(n.content, translated, n.author_name);
+              speakTranslation(translated, targetLang);
+            }
+          }
+        }
+      }
+    } catch(e) {}
+  }, 2500);
+}
+
+// ════════════════════════════════════════════════════════════
 //  PLANIFICATION DE RÉUNIONS
 // ════════════════════════════════════════════════════════════
 
@@ -2699,8 +2870,18 @@ async function startMeeting() {
       }
       startMeetingNotesPoll();
     }
-    // Activer transcription
+    // Langue et transcription
+    const meetingLang = document.getElementById('meeting-my-language').value || 'fr-FR';
+    _mySpeechLang = meetingLang;
+    _myLanguage = meetingLang.split('-')[0];
+    _translationEnabled = document.getElementById('meeting-translation-enabled').checked;
     if (speechEnabled) startSpeechTranscription();
+    // Activer traduction dans le polling
+    if (_translationEnabled) {
+      setTimeout(enhanceNotesPollWithTranslation, 2000);
+      const ttsBtn = document.getElementById('meeting-tts-toggle');
+      if (ttsBtn) ttsBtn.style.display = 'inline-block';
+    }
   } catch(e) { alert('Erreur: ' + e.message); }
   btn.disabled = false; btn.textContent = '🎬 Démarrer';
 }
@@ -2787,7 +2968,7 @@ function startSpeechTranscription() {
   _speechRecognition = new SR();
   _speechRecognition.continuous = true;
   _speechRecognition.interimResults = true;
-  _speechRecognition.lang = 'fr-FR';
+  _speechRecognition.lang = _mySpeechLang || 'fr-FR';
   _speechRecognition.maxAlternatives = 1;
   _speechLastText = '';
   _speechBuffer = '';
@@ -2852,7 +3033,7 @@ function flushSpeechBuffer() {
   fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes', {
     method: 'POST',
     headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({ session_id: _currentMeetingSession.id, author_id: me.id, author_name: me.name || me.phone, content: text, note_type: 'speech_transcript', timestamp_ms: elapsed })
+    body: JSON.stringify({ session_id: _currentMeetingSession.id, author_id: me.id, author_name: me.name || me.phone, content: text, note_type: 'speech_transcript', timestamp_ms: elapsed, source_lang: _myLanguage || 'fr' })
   }).catch(() => {});
 }
 
