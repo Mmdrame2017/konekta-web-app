@@ -2163,6 +2163,7 @@ async function startCall(type) {
 
 // --- Lancer Jitsi IFrame dans l'overlay ---
 function launchJitsiEmbed(roomName, callType, displayName) {
+  const isGroupRoom = roomName && roomName.includes('konekta-grp');
   const overlay = document.getElementById('call-overlay');
   const container = document.getElementById('jitsi-container');
   container.innerHTML = '';
@@ -2173,8 +2174,15 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   if (timerBar) timerBar.textContent = '00:00';
   // Afficher le bouton Notes pour les groupes + auto-créer session si manquante
   const notesToggle = document.getElementById('meeting-notes-toggle');
-  const isCoCo = _currentGroupId && currentChat?.groupType === 'coconstruction';
+  const isCoCo = (_currentGroupId && currentChat?.groupType === 'coconstruction') || isGroupRoom;
   if (notesToggle) notesToggle.style.display = isCoCo ? 'inline-block' : 'none';
+  // Toujours afficher le sélecteur de langue et TTS pour les appels de groupe
+  if (isGroupRoom) {
+    const langSelect = document.getElementById('call-language-select');
+    if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
+    const ttsBtn = document.getElementById('meeting-tts-toggle');
+    if (ttsBtn) ttsBtn.style.display = 'inline-block';
+  }
   const callTopbar = document.getElementById('call-topbar');
   if (callTopbar) callTopbar.style.display = 'flex';
   if (isCoCo && !_currentMeetingSession) {
