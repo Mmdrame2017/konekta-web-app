@@ -817,7 +817,7 @@
 <!-- Call Overlay (Jitsi IFrame API) -->
 <div id="call-overlay" style="display:none;position:fixed;inset:0;background:#000;z-index:10000;flex-direction:column">
   <!-- Barre supérieure avec timer + bouton Notes -->
-  <div id="call-topbar" style="display:none;position:relative;z-index:2;background:#111B21;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+  <div id="call-topbar" style="position:relative;z-index:2;background:#111B21;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div id="call-timer-bar" style="background:rgba(0,0,0,0.4);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem">00:00</div>
     <div style="display:flex;gap:6px">
       <!-- Sélecteur de langue pour TOUS les participants -->
@@ -2182,6 +2182,15 @@ function launchJitsiEmbed(roomName, callType, displayName) {
     if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
     const ttsBtn = document.getElementById('meeting-tts-toggle');
     if (ttsBtn) ttsBtn.style.display = 'inline-block';
+    // Démarrer automatiquement la transcription après 3s
+    setTimeout(() => {
+      if (!_speechRecognition) {
+        _mySpeechLang = (_myLanguage || 'fr') === 'wo' ? 'wo' : (_myLanguage || 'fr') + '-' + (_myLanguage || 'fr').toUpperCase();
+        startSpeechTranscription();
+        _translationEnabled = true;
+        enhanceNotesPollWithTranslation();
+      }
+    }, 3000);
   }
   const callTopbar = document.getElementById('call-topbar');
   if (callTopbar) callTopbar.style.display = 'flex';
