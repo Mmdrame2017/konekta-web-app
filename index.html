@@ -2352,7 +2352,40 @@ async function answerCall(callId) {
     const call = rows[0];
     _currentCallType = call.call_type || 'audio';
     if (call.offer && call.offer.room) {
-      launchJitsiEmbed(call.offer.room, call.call_type || 'audio', me.name || me.phone || 'User');
+      // Détecter si c'est un appel de groupe Co-Construction
+      const room = call.offer.room;
+      if (room.startsWith('konekta-grp-')) {
+        // Extraire le début de l'ID du groupe depuis le room name
+        const grpPart = room.replace('konekta-grp-', '');
+        try {
+          // Chercher les sessions actives avec ce jitsi_room
+          const sr = await fetch(sbUrl + '/rest/v1/konekta_meeting_sessions?jitsi_room=eq.' + room + '&status=eq.active&select=group_id', {
+            headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+          });
+          const sessions = await sr.json();
+          let groupId = null;
+          if (Array.isArray(sessions) && sessions.length > 0) {
+            groupId = sessions[0].group_id;
+          } else {
+            // Fallback : chercher par préfixe d'ID
+            const gr = await fetch(sbUrl + '/rest/v1/konekta_groups?id=like.' + grpPart.substring(0, 8) + '%&select=id,name,group_type&limit=1', {
+              headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+            });
+            const groups = await gr.json();
+            if (Array.isArray(groups) && groups.length > 0) groupId = groups[0].id;
+          }
+          if (groupId) {
+            _currentGroupId = groupId;
+            const grInfo = await fetch(sbUrl + '/rest/v1/konekta_groups?id=eq.' + groupId + '&select=id,name,group_type', {
+              headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey }
+            });
+            const grData = await grInfo.json();
+            const g = Array.isArray(grData) && grData[0] ? grData[0] : { id: groupId, name: 'Groupe', group_type: 'standard' };
+            currentChat = { isGroup: true, groupId: g.id, groupType: g.group_type || 'standard', userId: 'group_' + g.id, name: g.name || 'Groupe' };
+          }
+        } catch(e) { console.error('[ANSWER] Groupe detection error:', e); }
+      }
+      launchJitsiEmbed(room, call.call_type || 'audio', me.name || me.phone || 'User');
     }
     await fetch(sbUrl + '/rest/v1/konekta_calls?id=eq.' + callId, {
       method: 'PATCH',
