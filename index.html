@@ -1595,8 +1595,20 @@ async function recoverCredentials() {
       showMsg('forgot-msg', 'Aucun compte trouvé avec ce numéro.', 'error');
     } else {
       const sa = found.security_answers || {};
-      if (q1 !== sa.q1 || q2 !== sa.q2 || q3 !== sa.q3) {
+      const hasQuestions = sa.q1 && sa.q2 && sa.q3;
+      if (hasQuestions && (q1 !== sa.q1 || q2 !== sa.q2 || q3 !== sa.q3)) {
         showMsg('forgot-msg', 'Réponses incorrectes. Vérifiez vos réponses de sécurité.', 'error');
+      } else if (!hasQuestions) {
+        // Ancien compte sans questions → récupérer et sauvegarder les nouvelles réponses
+        if (q1 && q2 && q3) {
+          // Sauvegarder les questions pour la prochaine fois
+          fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?virtual_phone=eq.' + found.virtual_phone, {
+            method: 'PATCH',
+            headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+            body: JSON.stringify({ security_answers: { q1, q2, q3 } })
+          }).catch(() => {});
+        }
+        // Autoriser la récupération (ancien compte)
       } else {
         document.getElementById('recovered-virtual').textContent = found.virtual_phone;
         document.getElementById('recovered-code').textContent = found.code2 || found.code1;
