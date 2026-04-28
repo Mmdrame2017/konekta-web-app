@@ -2023,7 +2023,7 @@ function addToCart(productId) {
   if (!p) return;
   let cart = getCart();
   if (cart.some(c => c.id === productId)) { showToast('Déjà dans le panier'); return; }
-  cart.push({ id: p.id, name: p.name, price: p.price, image: p.image, seller_name: p.seller?.name || '', listing_type: p.listing_type || 'sale', added_at: new Date().toISOString() });
+  cart.push({ id: p.id, name: p.name, price: p.price, image: p.image, seller_id: p.seller_id, seller_name: p.seller?.name || '', seller_phone: p.seller?.phone || '', listing_type: p.listing_type || 'sale', added_at: new Date().toISOString() });
   saveCart(cart);
   showToast('Ajouté au panier 🛒');
 }
@@ -2093,11 +2093,52 @@ function loadMyCart() {
   }
   list.innerHTML = cart.map(p => {
     const priceLabel = p.listing_type === 'rental' ? 'Location' : p.price.toLocaleString() + ' F';
-    return '<div style="display:flex;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;align-items:center">'
-      + '<div style="width:40px;height:40px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px">' + (p.image && p.image.startsWith('http') ? '<img src="'+p.image+'" style="width:100%;height:100%;object-fit:cover;border-radius:8px">' : (p.image || '📦')) + '</div>'
-      + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(p.name) + '</div><div style="font-size:12px;color:var(--secondary);font-weight:700">' + priceLabel + '</div></div>'
-      + '<button onclick="removeFromCart(\'' + p.id + '\')" style="background:none;border:none;color:#E74C3C;font-size:16px;cursor:pointer;padding:4px" title="Retirer">✕</button></div>';
+    const imgHtml = p.image && p.image.startsWith('http') ? '<img src="'+p.image+'" style="width:100%;height:100%;object-fit:cover;border-radius:8px">' : '<span style="font-size:20px">'+(p.image || '📦')+'</span>';
+    const isRental = p.listing_type === 'rental';
+    return '<div style="padding:10px;background:var(--bg3);border-radius:10px">'
+      + '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">'
+      + '<div style="width:44px;height:44px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">' + imgHtml + '</div>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(p.name) + '</div><div style="font-size:12px;color:var(--secondary);font-weight:700">' + priceLabel + '</div>'
+      + (p.seller_name ? '<div style="font-size:10px;color:var(--text2)">Vendeur : ' + escHtml(p.seller_name) + '</div>' : '') + '</div>'
+      + '<button onclick="removeFromCart(\'' + p.id + '\')" style="background:none;border:none;color:#E74C3C;font-size:16px;cursor:pointer;padding:4px" title="Retirer">✕</button></div>'
+      + '<div style="display:flex;gap:6px">'
+      + (isRental ? '' : '<button onclick="closeModal(\'modal-my-products\');buyFromCart(\'' + p.id + '\')" style="flex:1;padding:6px;background:var(--wave);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">💳 Acheter</button>')
+      + '<button onclick="closeModal(\'modal-my-products\');contactFromCart(\'' + p.id + '\')" style="flex:1;padding:6px;background:var(--primary);border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">💬 ' + (isRental ? 'Contacter' : 'Contacter') + '</button>'
+      + '</div></div>';
   }).join('');
+}
+
+function buyFromCart(productId) {
+  // Ouvrir le modal d'achat depuis les produits chargés
+  const products = window._products || [];
+  if (products.length === 0) {
+    // Recharger les produits puis ouvrir
+    switchTab('marketplace');
+    setTimeout(() => openBuyModal(productId), 1000);
+  } else {
+    openBuyModal(productId);
+  }
+}
+
+function contactFromCart(productId) {
+  const cart = getCart();
+  const item = cart.find(c => c.id === productId);
+  if (!item) return;
+  const sellerId = item.seller_id || (window._products || []).find(x => x.id === productId)?.seller_id;
+  if (sellerId) {
+    const sellerName = item.seller_name || 'Vendeur';
+    switchTab('chat');
+    setTimeout(() => {
+      openChat({ userId: sellerId, name: sellerName, phone: item.seller_phone || '' });
+      setTimeout(() => {
+        const input = document.getElementById('chat-input');
+        if (input) { input.value = 'Bonjour, je suis intéressé(e) par "' + item.name + '" à ' + (item.price || 0).toLocaleString() + ' FCFA'; input.focus(); }
+      }, 500);
+    }, 300);
+  } else {
+    switchTab('marketplace');
+    showToast('Retrouvez le produit dans le marketplace');
+  }
 }
 
 function updateMyProductsCount() {
