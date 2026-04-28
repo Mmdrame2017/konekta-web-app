@@ -432,26 +432,62 @@
     <p>Chat · Paiement Wave · Marketplace</p>
   </div>
 
-  <div class="login-card" id="step-phone">
-    <h2>📱 Connexion</h2>
-    <div class="form-group">
-      <label>Numéro de téléphone</label>
-      <input type="tel" id="phone-input" placeholder="+221 77 000 00 00" autocomplete="tel">
-    </div>
-    <button class="btn btn-primary" onclick="sendOtp()" id="otp-btn">Recevoir le code OTP</button>
-    <p class="msg" id="phone-msg"></p>
+  <!-- Étape 1 : Choix Connexion / Inscription -->
+  <div class="login-card" id="step-choice">
+    <h2>Bienvenue !</h2>
+    <button class="btn btn-primary" onclick="showLoginStep()" style="margin-bottom:10px">🔑 Se connecter</button>
+    <button class="btn btn-secondary" onclick="showRegisterStep()">📝 Créer un compte</button>
   </div>
 
-  <div class="login-card" id="step-otp" style="display:none">
-    <h2>🔐 Code de vérification</h2>
-    <div class="otp-hint" id="otp-hint">Code de test : <strong id="otp-debug"></strong></div>
+  <!-- Étape 2a : Connexion -->
+  <div class="login-card" id="step-login" style="display:none">
+    <h2>🔑 Connexion</h2>
     <div class="form-group">
-      <label>Code OTP (4 chiffres)</label>
-      <input type="number" id="otp-input" placeholder="1234" maxlength="4" style="font-size:24px;text-align:center;letter-spacing:8px">
+      <label>Numéro virtuel Konekta</label>
+      <input type="tel" id="login-virtual" placeholder="744700000" autocomplete="username">
     </div>
-    <button class="btn btn-primary" onclick="verifyOtp()" id="verify-btn">Vérifier</button>
-    <button class="btn btn-secondary" onclick="backToPhone()" style="margin-top:8px">← Retour</button>
-    <p class="msg" id="otp-msg"></p>
+    <div class="form-group">
+      <label>Code d'accès</label>
+      <input type="password" id="login-code" placeholder="•••••" autocomplete="current-password" style="font-size:20px;letter-spacing:4px">
+    </div>
+    <button class="btn btn-primary" onclick="loginWithVirtual()" id="login-btn">Se connecter</button>
+    <button class="btn btn-secondary" onclick="showChoiceStep()" style="margin-top:8px">← Retour</button>
+    <p class="msg" id="login-msg"></p>
+  </div>
+
+  <!-- Étape 2b : Inscription -->
+  <div class="login-card" id="step-register" style="display:none">
+    <h2>📝 Créer un compte</h2>
+    <div class="form-group">
+      <label>Votre nom</label>
+      <input type="text" id="register-name" placeholder="Ex: Moustapha Drame">
+    </div>
+    <div class="form-group">
+      <label>Votre numéro de téléphone réel</label>
+      <input type="tel" id="register-phone" placeholder="+221 77 000 00 00">
+    </div>
+    <button class="btn btn-primary" onclick="registerNewUser()" id="register-btn">Obtenir mes identifiants</button>
+    <button class="btn btn-secondary" onclick="showChoiceStep()" style="margin-top:8px">← Retour</button>
+    <p class="msg" id="register-msg"></p>
+  </div>
+
+  <!-- Étape 3 : Identifiants attribués -->
+  <div class="login-card" id="step-credentials" style="display:none">
+    <h2>✅ Compte créé !</h2>
+    <div style="background:var(--bg3);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Votre numéro virtuel</div>
+        <div style="font-size:28px;font-weight:800;color:var(--primary);letter-spacing:2px" id="cred-virtual"></div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Votre code d'accès</div>
+        <div style="font-size:28px;font-weight:800;color:var(--wave);letter-spacing:4px" id="cred-code"></div>
+      </div>
+    </div>
+    <div style="background:rgba(247,201,72,0.1);border:1px solid rgba(247,201,72,0.3);border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--warning);line-height:1.5">
+      ⚠️ <strong>Important :</strong> Notez bien ces identifiants ! Ce numéro virtuel ne fonctionne que dans l'écosystème Konekta.
+    </div>
+    <button class="btn btn-primary" onclick="loginAfterRegister()">Accéder à Konekta →</button>
   </div>
 </div>
 
@@ -1330,114 +1366,119 @@ window.onload = () => {
 // ════════════════════════════════════════════════════════════
 const SUPA_FB_URL = 'https://dcnqauxppjusyinxqrgj.supabase.co';
 const SUPA_FB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
-let _otpCode = '';
+let _registeredVirtual = null;
+let _registeredCode = null;
 
-async function sendOtp() {
-  const phone = document.getElementById('phone-input').value.trim();
-  const btn = document.getElementById('otp-btn');
-  if (!phone) { showMsg('phone-msg', 'Entrez votre numéro', 'error'); return; }
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading"></span> Envoi...';
-  try {
-    const res = await fetch(`${API}/auth/send-otp`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ phone })
-    });
-    const data = await res.json();
-    if (data.success) {
-      document.getElementById('step-phone').style.display = 'none';
-      document.getElementById('step-otp').style.display = 'block';
-      if (data.debug_code) {
-        _otpCode = data.debug_code;
-        document.getElementById('otp-debug').textContent = data.debug_code;
-        document.getElementById('otp-hint').style.display = 'block';
-        document.getElementById('otp-input').value = data.debug_code;
-      }
-    } else {
-      showMsg('phone-msg', data.message || 'Erreur', 'error');
-    }
-  } catch(e) {
-    // Fallback : connexion directe via Supabase (sans OTP)
-    _otpCode = String(Math.floor(1000 + Math.random() * 9000));
-    document.getElementById('step-phone').style.display = 'none';
-    document.getElementById('step-otp').style.display = 'block';
-    document.getElementById('otp-debug').textContent = _otpCode;
-    document.getElementById('otp-hint').style.display = 'block';
-    document.getElementById('otp-input').value = _otpCode;
-    showMsg('phone-msg', '', 'info');
-  }
-  btn.disabled = false;
-  btn.innerHTML = 'Recevoir le code OTP';
+function showChoiceStep() {
+  ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
+    document.getElementById(id).style.display = id === 'step-choice' ? 'block' : 'none';
+  });
+}
+function showLoginStep() {
+  ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
+    document.getElementById(id).style.display = id === 'step-login' ? 'block' : 'none';
+  });
+  document.getElementById('login-msg').textContent = '';
+}
+function showRegisterStep() {
+  ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
+    document.getElementById(id).style.display = id === 'step-register' ? 'block' : 'none';
+  });
+  document.getElementById('register-msg').textContent = '';
 }
 
-async function verifyOtp() {
-  const phone = document.getElementById('phone-input').value.trim();
-  const code = document.getElementById('otp-input').value.trim();
-  const btn = document.getElementById('verify-btn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="loading"></span>';
+// --- CONNEXION avec numéro virtuel + code ---
+async function loginWithVirtual() {
+  const virtual = document.getElementById('login-virtual').value.trim();
+  const code = document.getElementById('login-code').value.trim();
+  if (!virtual || !code) { showMsg('login-msg', 'Numéro et code requis', 'error'); return; }
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Connexion...';
   try {
-    const res = await fetch(`${API}/auth/verify-otp`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ phone, code })
-    });
-    const data = await res.json();
-    if (data.success) {
-      token = data.token;
-      me = data.user;
-      localStorage.setItem('knk_token', token);
-      localStorage.setItem('knk_user', JSON.stringify(me));
-      showApp();
-    } else {
-      showMsg('otp-msg', data.message || 'Code incorrect', 'error');
-    }
-  } catch(e) {
-    // Fallback Supabase : vérifier le code local et upsert l'utilisateur
-    if (code !== _otpCode) { showMsg('otp-msg', 'Code incorrect', 'error'); btn.disabled=false; btn.innerHTML='Vérifier'; return; }
-    const digits = phone.replace(/\D/g, '');
-    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json' };
-    // Chercher l'utilisateur par les 9 derniers chiffres (numéro sans indicatif)
-    let users = [];
-    const without221 = digits.startsWith('221') ? digits.slice(3) : digits;
-    const last9 = without221.slice(-9);
-    // Chercher avec ilike sur les 9 derniers chiffres
-    try {
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=like.*' + last9 + '&select=*&limit=1', { headers: h });
-      const rows = await r.json();
-      if (Array.isArray(rows) && rows.length > 0) users = rows;
-    } catch(e3) {}
-    // Fallback : chercher exact
-    if (users.length === 0) {
-      const variants = [phone, digits, '+' + digits, without221, '221' + without221, '+221' + without221, last9];
-      for (const ph of variants) {
-        const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=*&limit=1', { headers: h });
-        const rows = await r.json();
-        if (Array.isArray(rows) && rows.length > 0) { users = rows; break; }
-      }
-    }
-    if (users.length > 0) {
-      me = users[0];
-    } else {
-      // Créer l'utilisateur
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users', {
-        method: 'POST', headers: { ...h, Prefer: 'return=representation' },
-        body: JSON.stringify({ phone: without221, name: '', solde: 0 })
-      });
-      const created = await r.json();
-      me = Array.isArray(created) ? created[0] : created;
-    }
-    token = 'local_' + Date.now();
+    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
+    // Chercher dans konekta_virtual_phones
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?virtual_phone=eq.' + encodeURIComponent(virtual) + '&select=*&limit=1', { headers: h });
+    const rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) { showMsg('login-msg', 'Numéro virtuel inconnu', 'error'); btn.disabled = false; btn.textContent = 'Se connecter'; return; }
+    const vp = rows[0];
+    // Vérifier le code (code1 ou code2)
+    if (code !== vp.code1 && (!vp.code2 || code !== vp.code2)) { showMsg('login-msg', 'Code d\'accès incorrect', 'error'); btn.disabled = false; btn.textContent = 'Se connecter'; return; }
+    // Vérifier que le numéro est attribué
+    if (!vp.user_id) { showMsg('login-msg', 'Ce numéro n\'est pas encore activé. Créez un compte.', 'error'); btn.disabled = false; btn.textContent = 'Se connecter'; return; }
+    // Charger l'utilisateur
+    const ur = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?id=eq.' + vp.user_id + '&select=*&limit=1', { headers: h });
+    const users = await ur.json();
+    if (!Array.isArray(users) || users.length === 0) { showMsg('login-msg', 'Utilisateur introuvable', 'error'); btn.disabled = false; btn.textContent = 'Se connecter'; return; }
+    me = users[0];
+    token = 'knk_' + Date.now();
     localStorage.setItem('knk_token', token);
     localStorage.setItem('knk_user', JSON.stringify(me));
     showApp();
-  }
-  btn.disabled = false;
-  btn.innerHTML = 'Vérifier';
+  } catch(e) { showMsg('login-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Se connecter';
 }
 
-function backToPhone() {
-  document.getElementById('step-otp').style.display = 'none';
-  document.getElementById('step-phone').style.display = 'block';
+// --- INSCRIPTION : attribuer numéro virtuel ---
+async function registerNewUser() {
+  const name = document.getElementById('register-name').value.trim();
+  const realPhone = document.getElementById('register-phone').value.trim();
+  if (!name) { showMsg('register-msg', 'Votre nom est requis', 'error'); return; }
+  if (!realPhone) { showMsg('register-msg', 'Votre numéro réel est requis', 'error'); return; }
+  const btn = document.getElementById('register-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
+  try {
+    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json' };
+    const digits = realPhone.replace(/\D/g, '');
+    const normalPhone = digits.startsWith('221') ? digits.slice(3) : digits;
+    // Vérifier si ce numéro réel est déjà enregistré
+    const check = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=eq.' + normalPhone + '&select=virtual_phone,code1&limit=1', { headers: h });
+    const existing = await check.json();
+    if (Array.isArray(existing) && existing.length > 0) {
+      _registeredVirtual = existing[0].virtual_phone;
+      _registeredCode = existing[0].code1;
+      document.getElementById('cred-virtual').textContent = _registeredVirtual;
+      document.getElementById('cred-code').textContent = _registeredCode;
+      ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
+        document.getElementById(id).style.display = id === 'step-credentials' ? 'block' : 'none';
+      });
+      btn.disabled = false; btn.textContent = 'Obtenir mes identifiants';
+      return;
+    }
+    // Trouver le prochain numéro virtuel libre
+    const fr = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=is.null&order=id.asc&limit=1&select=*', { headers: h });
+    const free = await fr.json();
+    if (!Array.isArray(free) || free.length === 0) { showMsg('register-msg', 'Plus de numéros disponibles. Contactez l\'administrateur.', 'error'); btn.disabled = false; btn.textContent = 'Obtenir mes identifiants'; return; }
+    const slot = free[0];
+    // Créer l'utilisateur dans konekta_users
+    const cr = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users', {
+      method: 'POST', headers: { ...h, Prefer: 'return=representation' },
+      body: JSON.stringify({ phone: slot.virtual_phone, name: name, solde: 0 })
+    });
+    const created = await cr.json();
+    const userId = Array.isArray(created) ? created[0].id : created.id;
+    // Attribuer le numéro virtuel
+    await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?id=eq.' + slot.id, {
+      method: 'PATCH', headers: { ...h, Prefer: 'return=minimal' },
+      body: JSON.stringify({ real_phone: normalPhone, owner_name: name, user_id: userId, assigned_at: new Date().toISOString() })
+    });
+    _registeredVirtual = slot.virtual_phone;
+    _registeredCode = slot.code1;
+    me = Array.isArray(created) ? created[0] : created;
+    document.getElementById('cred-virtual').textContent = _registeredVirtual;
+    document.getElementById('cred-code').textContent = _registeredCode;
+    ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
+      document.getElementById(id).style.display = id === 'step-credentials' ? 'block' : 'none';
+    });
+  } catch(e) { showMsg('register-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Obtenir mes identifiants';
+}
+
+function loginAfterRegister() {
+  if (!me) return;
+  token = 'knk_' + Date.now();
+  localStorage.setItem('knk_token', token);
+  localStorage.setItem('knk_user', JSON.stringify(me));
+  showApp();
 }
 
 function logout() {
