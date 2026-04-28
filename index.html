@@ -453,7 +453,37 @@
     </div>
     <button class="btn btn-primary" onclick="loginWithVirtual()" id="login-btn">Se connecter</button>
     <button class="btn btn-secondary" onclick="showChoiceStep()" style="margin-top:8px">← Retour</button>
+    <p style="text-align:center;margin-top:10px"><a href="#" onclick="showForgotStep();return false" style="color:var(--wave);font-size:12px;text-decoration:underline">Mot de passe oublié ?</a></p>
     <p class="msg" id="login-msg"></p>
+  </div>
+
+  <!-- Étape 2c : Mot de passe oublié -->
+  <div class="login-card" id="step-forgot" style="display:none">
+    <h2>🔓 Récupération</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Entrez votre numéro de téléphone réel (celui utilisé lors de l'inscription) pour récupérer vos identifiants.</p>
+    <div class="form-group">
+      <label>Numéro de téléphone réel</label>
+      <input type="tel" id="forgot-phone" placeholder="+221 77 000 00 00">
+    </div>
+    <button class="btn btn-primary" onclick="recoverCredentials()" id="forgot-btn">Récupérer mes identifiants</button>
+    <button class="btn btn-secondary" onclick="showLoginStep()" style="margin-top:8px">← Retour</button>
+    <p class="msg" id="forgot-msg"></p>
+  </div>
+
+  <!-- Étape 2d : Identifiants récupérés -->
+  <div class="login-card" id="step-recovered" style="display:none">
+    <h2>✅ Identifiants retrouvés</h2>
+    <div style="background:var(--bg3);border-radius:12px;padding:16px;margin-bottom:16px">
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Votre numéro virtuel</div>
+        <div style="font-size:28px;font-weight:800;color:var(--primary);letter-spacing:2px" id="recovered-virtual"></div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Votre code d'accès</div>
+        <div style="font-size:28px;font-weight:800;color:var(--wave);letter-spacing:4px" id="recovered-code"></div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="showLoginStep()">🔑 Se connecter maintenant</button>
   </div>
 
   <!-- Étape 2b : Inscription -->
@@ -1382,7 +1412,7 @@ const SUPA_FB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 let _registeredVirtual = null;
 let _registeredCode = null;
 
-const _loginSteps = ['step-choice','step-login','step-register','step-credentials','step-legacy'];
+const _loginSteps = ['step-choice','step-login','step-register','step-credentials','step-legacy','step-forgot','step-recovered'];
 function showChoiceStep() {
   _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-choice' ? 'block' : 'none'; });
 }
@@ -1479,6 +1509,46 @@ async function registerNewUser() {
     });
   } catch(e) { showMsg('register-msg', 'Erreur: ' + e.message, 'error'); }
   btn.disabled = false; btn.textContent = 'Obtenir mes identifiants';
+}
+
+function showForgotStep() {
+  _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-forgot' ? 'block' : 'none'; });
+  document.getElementById('forgot-msg').textContent = '';
+  document.getElementById('forgot-phone').value = '';
+}
+
+async function recoverCredentials() {
+  const phone = document.getElementById('forgot-phone').value.trim();
+  if (!phone) { showMsg('forgot-msg', 'Entrez votre numéro réel', 'error'); return; }
+  const btn = document.getElementById('forgot-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Recherche...';
+  try {
+    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
+    const digits = phone.replace(/\D/g, '');
+    const normalPhone = digits.startsWith('221') ? digits.slice(3) : digits;
+    // Chercher par numéro réel
+    let found = null;
+    const variants = [normalPhone, digits, phone.replace(/\s/g, '')];
+    for (const ph of variants) {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=eq.' + encodeURIComponent(ph) + '&select=virtual_phone,code1,code2&limit=1', { headers: h });
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length > 0) { found = rows[0]; break; }
+    }
+    if (!found) {
+      // Essayer avec like
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=like.*' + normalPhone.slice(-9) + '&select=virtual_phone,code1,code2&limit=1', { headers: h });
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length > 0) found = rows[0];
+    }
+    if (found) {
+      document.getElementById('recovered-virtual').textContent = found.virtual_phone;
+      document.getElementById('recovered-code').textContent = found.code2 || found.code1;
+      _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-recovered' ? 'block' : 'none'; });
+    } else {
+      showMsg('forgot-msg', 'Aucun compte trouvé avec ce numéro. Vérifiez ou créez un compte.', 'error');
+    }
+  } catch(e) { showMsg('forgot-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Récupérer mes identifiants';
 }
 
 function showLegacyLoginStep() {
