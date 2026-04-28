@@ -755,6 +755,13 @@
             </div>
             <span class="profile-row-arrow">›</span>
           </div>
+          <div class="profile-row" onclick="openChangePasswordModal()">
+            <div class="profile-row-left">
+              <span class="profile-row-icon">🔒</span>
+              <span class="profile-row-label">Modifier le mot de passe</span>
+            </div>
+            <span class="profile-row-arrow">›</span>
+          </div>
           <div class="profile-row">
             <div class="profile-row-left">
               <span class="profile-row-icon">🌐</span>
@@ -1191,6 +1198,33 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-edit-name')">Annuler</button>
       <button class="btn btn-primary" onclick="saveName()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password -->
+<div class="modal-overlay" id="modal-change-password">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🔒 Modifier le mot de passe</h3>
+      <button class="close-btn" onclick="closeModal('modal-change-password')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Code actuel</label>
+      <input type="password" id="pwd-current" placeholder="Votre code actuel" style="font-size:18px;letter-spacing:3px">
+    </div>
+    <div class="form-group">
+      <label>Nouveau code</label>
+      <input type="password" id="pwd-new" placeholder="Nouveau code" style="font-size:18px;letter-spacing:3px">
+    </div>
+    <div class="form-group">
+      <label>Confirmer le nouveau code</label>
+      <input type="password" id="pwd-confirm" placeholder="Confirmer" style="font-size:18px;letter-spacing:3px">
+    </div>
+    <p class="msg" id="pwd-msg"></p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-change-password')">Annuler</button>
+      <button class="btn btn-primary" onclick="changePassword()" id="pwd-btn">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -1949,6 +1983,55 @@ async function refuserRetrait(id) {
     await apiFetch(`/withdrawals/${id}/refuse`, 'POST', { note });
     loadAdminWithdrawals();
   } catch(e) { alert('Erreur : ' + (e.message || 'inconnue')); }
+}
+
+function openChangePasswordModal() {
+  document.getElementById('pwd-current').value = '';
+  document.getElementById('pwd-new').value = '';
+  document.getElementById('pwd-confirm').value = '';
+  document.getElementById('pwd-msg').textContent = '';
+  openModal('modal-change-password');
+}
+
+async function changePassword() {
+  const current = document.getElementById('pwd-current').value.trim();
+  const newPwd = document.getElementById('pwd-new').value.trim();
+  const confirm = document.getElementById('pwd-confirm').value.trim();
+  if (!current) { showMsg('pwd-msg', 'Entrez votre code actuel', 'error'); return; }
+  if (!newPwd) { showMsg('pwd-msg', 'Entrez un nouveau code', 'error'); return; }
+  if (newPwd.length < 4) { showMsg('pwd-msg', 'Le code doit avoir au moins 4 caractères', 'error'); return; }
+  if (newPwd !== confirm) { showMsg('pwd-msg', 'Les codes ne correspondent pas', 'error'); return; }
+  const btn = document.getElementById('pwd-btn');
+  btn.disabled = true; btn.textContent = 'Vérification...';
+  try {
+    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
+    // Chercher le numéro virtuel de l'utilisateur connecté
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?user_id=eq.' + me.id + '&select=id,code1,code2', { headers: h });
+    const rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      // Essayer par téléphone
+      const r2 = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?virtual_phone=eq.' + (me.phone || '') + '&select=id,code1,code2', { headers: h });
+      const rows2 = await r2.json();
+      if (!Array.isArray(rows2) || rows2.length === 0) { showMsg('pwd-msg', 'Compte virtuel non trouvé. Utilisez le fallback ancien système.', 'error'); btn.disabled = false; btn.textContent = 'Enregistrer'; return; }
+      rows.push(rows2[0]);
+    }
+    const vp = rows[0];
+    // Vérifier le code actuel (code1 ou code2)
+    if (current !== vp.code1 && (!vp.code2 || current !== vp.code2)) {
+      showMsg('pwd-msg', 'Code actuel incorrect', 'error');
+      btn.disabled = false; btn.textContent = 'Enregistrer';
+      return;
+    }
+    // Sauvegarder le nouveau code dans code2
+    await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?id=eq.' + vp.id, {
+      method: 'PATCH',
+      headers: { ...h, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ code2: newPwd })
+    });
+    showMsg('pwd-msg', 'Mot de passe modifié avec succès !', 'success');
+    setTimeout(() => closeModal('modal-change-password'), 1500);
+  } catch(e) { showMsg('pwd-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Enregistrer';
 }
 
 function openEditNameModal() {
