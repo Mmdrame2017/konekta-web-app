@@ -436,7 +436,8 @@
   <div class="login-card" id="step-choice">
     <h2>Bienvenue !</h2>
     <button class="btn btn-primary" onclick="showLoginStep()" style="margin-bottom:10px">🔑 Se connecter</button>
-    <button class="btn btn-secondary" onclick="showRegisterStep()">📝 Créer un compte</button>
+    <button class="btn btn-secondary" onclick="showRegisterStep()" style="margin-bottom:10px">📝 Créer un compte</button>
+    <p style="text-align:center;margin-top:8px"><a href="#" onclick="showLegacyLoginStep();return false" style="color:var(--text2);font-size:12px;text-decoration:underline">Connexion avec numéro réel (ancien système)</a></p>
   </div>
 
   <!-- Étape 2a : Connexion -->
@@ -488,6 +489,18 @@
       ⚠️ <strong>Important :</strong> Notez bien ces identifiants ! Ce numéro virtuel ne fonctionne que dans l'écosystème Konekta.
     </div>
     <button class="btn btn-primary" onclick="loginAfterRegister()">Accéder à Konekta →</button>
+  </div>
+
+  <!-- Fallback : Connexion avec numéro réel (ancien système) -->
+  <div class="login-card" id="step-legacy" style="display:none">
+    <h2>📱 Connexion (ancien système)</h2>
+    <div class="form-group">
+      <label>Numéro de téléphone réel</label>
+      <input type="tel" id="legacy-phone" placeholder="+221 77 000 00 00" autocomplete="tel">
+    </div>
+    <button class="btn btn-primary" onclick="legacyLogin()" id="legacy-btn">Se connecter</button>
+    <button class="btn btn-secondary" onclick="showChoiceStep()" style="margin-top:8px">← Retour</button>
+    <p class="msg" id="legacy-msg"></p>
   </div>
 </div>
 
@@ -1369,21 +1382,16 @@ const SUPA_FB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 let _registeredVirtual = null;
 let _registeredCode = null;
 
+const _loginSteps = ['step-choice','step-login','step-register','step-credentials','step-legacy'];
 function showChoiceStep() {
-  ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
-    document.getElementById(id).style.display = id === 'step-choice' ? 'block' : 'none';
-  });
+  _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-choice' ? 'block' : 'none'; });
 }
 function showLoginStep() {
-  ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
-    document.getElementById(id).style.display = id === 'step-login' ? 'block' : 'none';
-  });
+  _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-login' ? 'block' : 'none'; });
   document.getElementById('login-msg').textContent = '';
 }
 function showRegisterStep() {
-  ['step-choice','step-login','step-register','step-credentials'].forEach(id => {
-    document.getElementById(id).style.display = id === 'step-register' ? 'block' : 'none';
-  });
+  _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-register' ? 'block' : 'none'; });
   document.getElementById('register-msg').textContent = '';
 }
 
@@ -1471,6 +1479,53 @@ async function registerNewUser() {
     });
   } catch(e) { showMsg('register-msg', 'Erreur: ' + e.message, 'error'); }
   btn.disabled = false; btn.textContent = 'Obtenir mes identifiants';
+}
+
+function showLegacyLoginStep() {
+  ['step-choice','step-login','step-register','step-credentials','step-legacy'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === 'step-legacy' ? 'block' : 'none';
+  });
+  document.getElementById('legacy-msg').textContent = '';
+}
+
+async function legacyLogin() {
+  const phone = document.getElementById('legacy-phone').value.trim();
+  if (!phone) { showMsg('legacy-msg', 'Entrez votre numéro', 'error'); return; }
+  const btn = document.getElementById('legacy-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Connexion...';
+  try {
+    const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
+    const digits = phone.replace(/\D/g, '');
+    const without221 = digits.startsWith('221') ? digits.slice(3) : digits;
+    const last9 = without221.slice(-9);
+    let users = [];
+    // Chercher par les 9 derniers chiffres
+    try {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=like.*' + last9 + '&select=*&limit=1', { headers: h });
+      const rows = await r.json();
+      if (Array.isArray(rows) && rows.length > 0) users = rows;
+    } catch(e) {}
+    // Fallback exact
+    if (users.length === 0) {
+      const variants = [phone, digits, without221, last9];
+      for (const ph of variants) {
+        const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?phone=eq.' + encodeURIComponent(ph) + '&select=*&limit=1', { headers: h });
+        const rows = await r.json();
+        if (Array.isArray(rows) && rows.length > 0) { users = rows; break; }
+      }
+    }
+    if (users.length > 0) {
+      me = users[0];
+      token = 'knk_' + Date.now();
+      localStorage.setItem('knk_token', token);
+      localStorage.setItem('knk_user', JSON.stringify(me));
+      showApp();
+    } else {
+      showMsg('legacy-msg', 'Numéro non trouvé. Créez un compte.', 'error');
+    }
+  } catch(e) { showMsg('legacy-msg', 'Erreur: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Se connecter';
 }
 
 function loginAfterRegister() {
