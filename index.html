@@ -804,10 +804,13 @@
             </div>
             <span class="profile-row-arrow">›</span>
           </div>
-          <div class="profile-row" onclick="switchTab('marketplace')">
+          <div class="profile-row" onclick="openMyProductsModal()">
             <div class="profile-row-left">
               <span class="profile-row-icon">🏪</span>
-              <span class="profile-row-label">Mes produits</span>
+              <div>
+                <div class="profile-row-label">Mes produits & Panier</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px" id="my-products-count">Chargement...</div>
+              </div>
             </div>
             <span class="profile-row-arrow">›</span>
           </div>
@@ -1229,6 +1232,28 @@
   </div>
 </div>
 
+<!-- My Products & Cart -->
+<div class="modal-overlay" id="modal-my-products">
+  <div class="modal" style="max-width:500px;max-height:85vh">
+    <div class="modal-header">
+      <h3>🏪 Mes produits & Panier</h3>
+      <button class="close-btn" onclick="closeModal('modal-my-products')">✕</button>
+    </div>
+    <!-- Onglets -->
+    <div style="display:flex;gap:0;margin-bottom:12px;border-bottom:1px solid var(--border)">
+      <button onclick="showMyProductsTab('selling')" id="myprod-tab-selling" style="flex:1;padding:8px;border:none;background:transparent;color:var(--primary);font-size:13px;font-weight:700;cursor:pointer;border-bottom:2px solid var(--primary);font-family:inherit">🏷️ Mes ventes</button>
+      <button onclick="showMyProductsTab('cart')" id="myprod-tab-cart" style="flex:1;padding:8px;border:none;background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit">🛒 Mon panier</button>
+    </div>
+    <!-- Liste Mes ventes -->
+    <div id="myprod-selling-list" style="display:flex;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto"></div>
+    <!-- Liste Panier -->
+    <div id="myprod-cart-list" style="display:none;flex-direction:column;gap:8px;max-height:55vh;overflow-y:auto"></div>
+    <div style="margin-top:12px">
+      <button class="btn btn-secondary" onclick="closeModal('modal-my-products')" style="width:100%">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Retrait supprimé — Payout Wave automatique -->
 
 <!-- Edit Wave Phone -->
@@ -1453,6 +1478,7 @@
     <div class="modal-footer" style="flex-direction:column;gap:8px">
       <button class="btn btn-primary" onclick="buyProduct()" id="buy-prod-btn">💳 Payer via Wave</button>
       <button class="btn btn-secondary" onclick="contactSeller()" id="contact-seller-btn" style="border-color:var(--primary);color:var(--primary)">💬 Contacter le vendeur</button>
+      <button class="btn btn-secondary" onclick="addToCart(buyTargetProduct?.id);closeModal('modal-buy-product')" id="add-cart-btn" style="border-color:var(--warning);color:var(--warning)">🛒 Ajouter au panier</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-buy-product')" style="font-size:13px">Annuler</button>
     </div>
   </div>
@@ -1854,6 +1880,7 @@ async function loadProfile() {
   const debugEl = document.getElementById('debug-id');
   if (debugEl) debugEl.textContent = 'ID: ' + (me.id || 'UNDEFINED') + ' | Phone: ' + (me.phone || 'NONE');
   loadSolde();
+  setTimeout(updateMyProductsCount, 2000);
 }
 
 let _soldeInterval = null;
@@ -1983,6 +2010,102 @@ async function refuserRetrait(id) {
     await apiFetch(`/withdrawals/${id}/refuse`, 'POST', { note });
     loadAdminWithdrawals();
   } catch(e) { alert('Erreur : ' + (e.message || 'inconnue')); }
+}
+
+// ════════════════════════════════════════════════════════════
+//  MES PRODUITS & PANIER
+// ════════════════════════════════════════════════════════════
+function getCart() { try { return JSON.parse(localStorage.getItem('knk_cart') || '[]'); } catch(e) { return []; } }
+function saveCart(cart) { localStorage.setItem('knk_cart', JSON.stringify(cart)); }
+
+function addToCart(productId) {
+  const p = (window._products || []).find(x => x.id === productId);
+  if (!p) return;
+  let cart = getCart();
+  if (cart.some(c => c.id === productId)) { showToast('Déjà dans le panier'); return; }
+  cart.push({ id: p.id, name: p.name, price: p.price, image: p.image, seller_name: p.seller?.name || '', listing_type: p.listing_type || 'sale', added_at: new Date().toISOString() });
+  saveCart(cart);
+  showToast('Ajouté au panier 🛒');
+}
+
+function removeFromCart(productId) {
+  let cart = getCart();
+  cart = cart.filter(c => c.id !== productId);
+  saveCart(cart);
+  loadMyCart();
+}
+
+function openMyProductsModal() {
+  openModal('modal-my-products');
+  showMyProductsTab('selling');
+}
+
+function showMyProductsTab(tab) {
+  const sellingTab = document.getElementById('myprod-tab-selling');
+  const cartTab = document.getElementById('myprod-tab-cart');
+  const sellingList = document.getElementById('myprod-selling-list');
+  const cartList = document.getElementById('myprod-cart-list');
+  if (tab === 'selling') {
+    sellingTab.style.color = 'var(--primary)'; sellingTab.style.borderBottom = '2px solid var(--primary)';
+    cartTab.style.color = 'var(--text2)'; cartTab.style.borderBottom = '2px solid transparent';
+    sellingList.style.display = 'flex'; cartList.style.display = 'none';
+    loadMySellingProducts();
+  } else {
+    cartTab.style.color = 'var(--primary)'; cartTab.style.borderBottom = '2px solid var(--primary)';
+    sellingTab.style.color = 'var(--text2)'; sellingTab.style.borderBottom = '2px solid transparent';
+    sellingList.style.display = 'none'; cartList.style.display = 'flex';
+    loadMyCart();
+  }
+}
+
+async function loadMySellingProducts() {
+  const list = document.getElementById('myprod-selling-list');
+  list.innerHTML = '<div style="text-align:center;color:var(--text2);padding:20px;font-size:12px">Chargement...</div>';
+  try {
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_products?seller_id=eq.' + me.id + '&order=created_at.desc&select=*', {
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+    });
+    const products = await r.json();
+    if (!Array.isArray(products) || products.length === 0) {
+      list.innerHTML = '<div style="text-align:center;color:var(--text2);padding:30px"><div style="font-size:32px;margin-bottom:8px">🏷️</div>Aucun produit en vente<br><button onclick="closeModal(\'modal-my-products\');switchTab(\'marketplace\')" style="margin-top:10px;background:var(--primary);border:none;color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit">+ Vendre un produit</button></div>';
+      return;
+    }
+    list.innerHTML = products.map(p => {
+      const isImg = p.image && p.image.startsWith('http');
+      const imgHtml = isImg ? '<img src="' + p.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:8px">' : '<span style="font-size:24px">' + (p.image || '📦') + '</span>';
+      const priceLabel = p.listing_type === 'rental' ? (p.price_per_day ? p.price_per_day.toLocaleString() + ' F/j' : p.price_per_month ? p.price_per_month.toLocaleString() + ' F/mois' : p.price.toLocaleString() + ' F') : p.price.toLocaleString() + ' F';
+      const statusColor = p.available ? '#00A884' : '#E74C3C';
+      const statusLabel = p.available ? 'En ligne' : 'Retiré';
+      return '<div style="display:flex;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;align-items:center">'
+        + '<div style="width:50px;height:50px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">' + imgHtml + '</div>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(p.name) + '</div><div style="font-size:12px;color:var(--secondary);font-weight:700">' + priceLabel + '</div></div>'
+        + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span style="font-size:10px;color:' + statusColor + ';font-weight:600">' + statusLabel + '</span><button onclick="closeModal(\'modal-my-products\');openEditProductModal(\'' + p.id + '\')" style="font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text2);padding:3px 8px;cursor:pointer;font-family:inherit">✏️ Modifier</button></div></div>';
+    }).join('');
+  } catch(e) { list.innerHTML = '<div style="color:var(--text2);padding:20px;text-align:center">Erreur</div>'; }
+}
+
+function loadMyCart() {
+  const list = document.getElementById('myprod-cart-list');
+  const cart = getCart();
+  if (cart.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text2);padding:30px"><div style="font-size:32px;margin-bottom:8px">🛒</div>Votre panier est vide<br><button onclick="closeModal(\'modal-my-products\');switchTab(\'marketplace\')" style="margin-top:10px;background:var(--primary);border:none;color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit">Explorer le marketplace</button></div>';
+    return;
+  }
+  list.innerHTML = cart.map(p => {
+    const priceLabel = p.listing_type === 'rental' ? 'Location' : p.price.toLocaleString() + ' F';
+    return '<div style="display:flex;gap:10px;padding:10px;background:var(--bg3);border-radius:8px;align-items:center">'
+      + '<div style="width:40px;height:40px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px">' + (p.image && p.image.startsWith('http') ? '<img src="'+p.image+'" style="width:100%;height:100%;object-fit:cover;border-radius:8px">' : (p.image || '📦')) + '</div>'
+      + '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escHtml(p.name) + '</div><div style="font-size:12px;color:var(--secondary);font-weight:700">' + priceLabel + '</div></div>'
+      + '<button onclick="removeFromCart(\'' + p.id + '\')" style="background:none;border:none;color:#E74C3C;font-size:16px;cursor:pointer;padding:4px" title="Retirer">✕</button></div>';
+  }).join('');
+}
+
+function updateMyProductsCount() {
+  const el = document.getElementById('my-products-count');
+  if (!el) return;
+  const cart = getCart();
+  const selling = (window._products || []).filter(p => p.seller_id === me.id).length;
+  el.textContent = selling + ' en vente · ' + cart.length + ' au panier';
 }
 
 function openChangePasswordModal() {
