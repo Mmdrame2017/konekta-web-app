@@ -1808,9 +1808,16 @@ async function loadChats() {
       const m2 = await r2.json();
       if (Array.isArray(m2)) allMsgs = m2;
     }
-    // Grouper par chat_id
+    // Grouper par interlocuteur (déduplique les chat_id multiples pour le même contact)
     const chats = {};
-    allMsgs.forEach(m => { if (m.chat_id && !chats[m.chat_id]) chats[m.chat_id] = m; });
+    allMsgs.forEach(m => {
+      if (!m.chat_id) return;
+      const otherId = m.sender_id === me.id ? m.receiver_id : m.sender_id;
+      if (!otherId) return;
+      if (!chats[otherId] || new Date(m.created_at) > new Date(chats[otherId].created_at)) {
+        chats[otherId] = m;
+      }
+    });
     let data = Object.values(chats);
     const el = document.getElementById('chat-items');
     if (!el) return;
