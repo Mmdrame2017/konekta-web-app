@@ -460,14 +460,31 @@
   <!-- Étape 2c : Mot de passe oublié -->
   <div class="login-card" id="step-forgot" style="display:none">
     <h2>🔓 Récupération</h2>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Entrez votre numéro réel et le nom utilisé lors de l'inscription pour vérifier votre identité.</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Entrez votre numéro réel et répondez aux questions de sécurité.</p>
     <div class="form-group">
       <label>Numéro de téléphone réel</label>
       <input type="tel" id="forgot-phone" placeholder="+221 77 000 00 00">
     </div>
     <div class="form-group">
-      <label>Nom complet (tel qu'inscrit)</label>
-      <input type="text" id="forgot-name" placeholder="Ex: Moustapha Drame">
+      <label style="font-size:12px">🍎 Quel est votre fruit préféré ?</label>
+      <select id="forgot-q1" style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit">
+        <option value="">-- Choisir --</option>
+        <option value="mangue">Mangue</option><option value="orange">Orange</option><option value="banane">Banane</option><option value="pomme">Pomme</option><option value="pasteque">Pastèque</option><option value="ananas">Ananas</option><option value="papaye">Papaye</option><option value="fraise">Fraise</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label style="font-size:12px">⚽ Quel est votre sport préféré ?</label>
+      <select id="forgot-q2" style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit">
+        <option value="">-- Choisir --</option>
+        <option value="football">Football</option><option value="basketball">Basketball</option><option value="lutte">Lutte</option><option value="athletisme">Athlétisme</option><option value="tennis">Tennis</option><option value="natation">Natation</option><option value="boxe">Boxe</option><option value="cyclisme">Cyclisme</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label style="font-size:12px">🎨 Quelle est votre couleur préférée ?</label>
+      <select id="forgot-q3" style="width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit">
+        <option value="">-- Choisir --</option>
+        <option value="rouge">Rouge</option><option value="bleu">Bleu</option><option value="vert">Vert</option><option value="jaune">Jaune</option><option value="blanc">Blanc</option><option value="noir">Noir</option><option value="orange">Orange</option><option value="violet">Violet</option>
+      </select>
     </div>
     <button class="btn btn-primary" onclick="recoverCredentials()" id="forgot-btn">Vérifier et récupérer</button>
     <button class="btn btn-secondary" onclick="showLoginStep()" style="margin-top:8px">← Retour</button>
@@ -500,6 +517,30 @@
     <div class="form-group">
       <label>Votre numéro de téléphone réel</label>
       <input type="tel" id="register-phone" placeholder="+221 77 000 00 00">
+    </div>
+    <div style="background:var(--bg3);border-radius:var(--radius);padding:12px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px">🔒 Questions de sécurité (récupération mot de passe)</div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:12px">🍎 Quel est votre fruit préféré ?</label>
+        <select id="register-q1" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit">
+          <option value="">-- Choisir --</option>
+          <option value="mangue">Mangue</option><option value="orange">Orange</option><option value="banane">Banane</option><option value="pomme">Pomme</option><option value="pasteque">Pastèque</option><option value="ananas">Ananas</option><option value="papaye">Papaye</option><option value="fraise">Fraise</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:12px">⚽ Quel est votre sport préféré ?</label>
+        <select id="register-q2" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit">
+          <option value="">-- Choisir --</option>
+          <option value="football">Football</option><option value="basketball">Basketball</option><option value="lutte">Lutte</option><option value="athletisme">Athlétisme</option><option value="tennis">Tennis</option><option value="natation">Natation</option><option value="boxe">Boxe</option><option value="cyclisme">Cyclisme</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label style="font-size:12px">🎨 Quelle est votre couleur préférée ?</label>
+        <select id="register-q3" style="width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit">
+          <option value="">-- Choisir --</option>
+          <option value="rouge">Rouge</option><option value="bleu">Bleu</option><option value="vert">Vert</option><option value="jaune">Jaune</option><option value="blanc">Blanc</option><option value="noir">Noir</option><option value="orange">Orange</option><option value="violet">Violet</option>
+        </select>
+      </div>
     </div>
     <button class="btn btn-primary" onclick="registerNewUser()" id="register-btn">Obtenir mes identifiants</button>
     <button class="btn btn-secondary" onclick="showChoiceStep()" style="margin-top:8px">← Retour</button>
@@ -1464,8 +1505,12 @@ async function loginWithVirtual() {
 async function registerNewUser() {
   const name = document.getElementById('register-name').value.trim();
   const realPhone = document.getElementById('register-phone').value.trim();
+  const q1 = document.getElementById('register-q1').value;
+  const q2 = document.getElementById('register-q2').value;
+  const q3 = document.getElementById('register-q3').value;
   if (!name) { showMsg('register-msg', 'Votre nom est requis', 'error'); return; }
   if (!realPhone) { showMsg('register-msg', 'Votre numéro réel est requis', 'error'); return; }
+  if (!q1 || !q2 || !q3) { showMsg('register-msg', 'Répondez aux 3 questions de sécurité', 'error'); return; }
   const btn = document.getElementById('register-btn');
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Création...';
   try {
@@ -1501,7 +1546,7 @@ async function registerNewUser() {
     // Attribuer le numéro virtuel
     await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?id=eq.' + slot.id, {
       method: 'PATCH', headers: { ...h, Prefer: 'return=minimal' },
-      body: JSON.stringify({ real_phone: normalPhone, owner_name: name, user_id: userId, assigned_at: new Date().toISOString() })
+      body: JSON.stringify({ real_phone: normalPhone, owner_name: name, user_id: userId, assigned_at: new Date().toISOString(), security_answers: { q1, q2, q3 } })
     });
     _registeredVirtual = slot.virtual_phone;
     _registeredCode = slot.code1;
@@ -1523,35 +1568,35 @@ function showForgotStep() {
 
 async function recoverCredentials() {
   const phone = document.getElementById('forgot-phone').value.trim();
-  const name = document.getElementById('forgot-name').value.trim();
+  const q1 = document.getElementById('forgot-q1').value;
+  const q2 = document.getElementById('forgot-q2').value;
+  const q3 = document.getElementById('forgot-q3').value;
   if (!phone) { showMsg('forgot-msg', 'Entrez votre numéro réel', 'error'); return; }
-  if (!name) { showMsg('forgot-msg', 'Entrez votre nom complet', 'error'); return; }
+  if (!q1 || !q2 || !q3) { showMsg('forgot-msg', 'Répondez aux 3 questions', 'error'); return; }
   const btn = document.getElementById('forgot-btn');
   btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Vérification...';
   try {
     const h = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
     const digits = phone.replace(/\D/g, '');
     const normalPhone = digits.startsWith('221') ? digits.slice(3) : digits;
-    // Chercher par numéro réel
     let found = null;
     const variants = [normalPhone, digits, phone.replace(/\s/g, '')];
     for (const ph of variants) {
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=eq.' + encodeURIComponent(ph) + '&select=virtual_phone,code1,code2,owner_name&limit=1', { headers: h });
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=eq.' + encodeURIComponent(ph) + '&select=virtual_phone,code1,code2,security_answers&limit=1', { headers: h });
       const rows = await r.json();
       if (Array.isArray(rows) && rows.length > 0) { found = rows[0]; break; }
     }
     if (!found) {
-      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=like.*' + normalPhone.slice(-9) + '&select=virtual_phone,code1,code2,owner_name&limit=1', { headers: h });
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_virtual_phones?real_phone=like.*' + normalPhone.slice(-9) + '&select=virtual_phone,code1,code2,security_answers&limit=1', { headers: h });
       const rows = await r.json();
       if (Array.isArray(rows) && rows.length > 0) found = rows[0];
     }
     if (!found) {
       showMsg('forgot-msg', 'Aucun compte trouvé avec ce numéro.', 'error');
     } else {
-      // Vérifier le nom (comparaison insensible à la casse et aux accents)
-      const normalize = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
-      if (normalize(name) !== normalize(found.owner_name || '')) {
-        showMsg('forgot-msg', 'Le nom ne correspond pas au compte associé à ce numéro.', 'error');
+      const sa = found.security_answers || {};
+      if (q1 !== sa.q1 || q2 !== sa.q2 || q3 !== sa.q3) {
+        showMsg('forgot-msg', 'Réponses incorrectes. Vérifiez vos réponses de sécurité.', 'error');
       } else {
         document.getElementById('recovered-virtual').textContent = found.virtual_phone;
         document.getElementById('recovered-code').textContent = found.code2 || found.code1;
