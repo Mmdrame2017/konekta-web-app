@@ -896,7 +896,13 @@
   <button onclick="cancelVoiceRecord()" style="background:none;border:none;color:#E74C3C;font-size:18px;cursor:pointer">✕</button>
   <button onclick="sendVoiceRecord()" style="background:var(--primary);border:none;color:#fff;padding:6px 14px;border-radius:16px;font-size:13px;font-weight:600;cursor:pointer">Envoyer</button>
 </div>
-<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}} @keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}</style>
+<style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}} @keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.msg-context-menu{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:5000;min-width:140px;overflow:hidden;animation:fadeIn 0.15s ease}
+.msg-context-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;color:var(--text);font-size:13px;font-family:inherit;cursor:pointer;text-align:left}
+.msg-context-menu button:hover{background:var(--bg3)}
+@keyframes fadeIn{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+.msg-bubble.selected{outline:2px solid var(--primary);outline-offset:2px}
+</style>
 
 <!-- Image Zoom Overlay -->
 <div id="image-zoom-overlay" onclick="closeZoom()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10001;align-items:center;justify-content:center;cursor:zoom-out;padding:20px">
@@ -3805,7 +3811,19 @@ function appendMessage(msg, isHistory=false) {
 
   const wrapper = document.createElement('div');
   wrapper.innerHTML = html;
-  area.appendChild(wrapper.firstElementChild);
+  const el = wrapper.firstElementChild;
+  // Menu contextuel (copier/transférer) — désactivé en Co-Construction
+  if (el && currentChat?.groupType !== 'coconstruction') {
+    const rawContent = msg.content || '';
+    el.dataset.msgContent = rawContent;
+    el.dataset.msgSender = (msg.sender_id || msg.senderId) === me.id ? 'Moi' : (msg.author_name || '');
+    el.addEventListener('contextmenu', function(e) { e.preventDefault(); showMsgContextMenu(e, this); });
+    let _longPress = null;
+    el.addEventListener('touchstart', function(e) { _longPress = setTimeout(() => showMsgContextMenu(e.touches[0], this), 500); }, { passive: true });
+    el.addEventListener('touchend', function() { clearTimeout(_longPress); });
+    el.addEventListener('touchmove', function() { clearTimeout(_longPress); });
+  }
+  area.appendChild(el);
   if (!isHistory) area.scrollTop = area.scrollHeight;
 }
 
@@ -4581,6 +4599,150 @@ function showMsg(id, text, type='') {
   const el = document.getElementById(id);
   el.textContent = text;
   el.className = `msg ${type}`;
+}
+
+// ════════════════════════════════════════════════════════════
+//  COPIER / TRANSFÉRER MESSAGES
+// ════════════════════════════════════════════════════════════
+let _selectedMsgContent = '';
+let _selectedMsgEl = null;
+
+function showMsgContextMenu(e, msgEl) {
+  closeMsgContextMenu();
+  _selectedMsgContent = msgEl.dataset.msgContent || msgEl.innerText || '';
+  _selectedMsgEl = msgEl;
+  msgEl.classList.add('selected');
+  const menu = document.createElement('div');
+  menu.className = 'msg-context-menu';
+  menu.id = 'msg-context-menu';
+  menu.innerHTML = '<button onclick="copyMessage()">📋 Copier</button>'
+    + '<button onclick="openForwardModal()">↗️ Transférer</button>';
+  menu.style.left = Math.min(e.clientX || e.pageX, window.innerWidth - 160) + 'px';
+  menu.style.top = Math.min(e.clientY || e.pageY, window.innerHeight - 100) + 'px';
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', closeMsgContextMenu, { once: true }), 100);
+}
+
+function closeMsgContextMenu() {
+  const menu = document.getElementById('msg-context-menu');
+  if (menu) menu.remove();
+  if (_selectedMsgEl) { _selectedMsgEl.classList.remove('selected'); _selectedMsgEl = null; }
+}
+
+function copyMessage() {
+  closeMsgContextMenu();
+  const text = _selectedMsgContent.replace(/<[^>]*>/g, '').trim();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Message copié');
+    }).catch(() => { fallbackCopy(text); });
+  } else { fallbackCopy(text); }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  document.execCommand('copy'); ta.remove();
+  showToast('Message copié');
+}
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:100000;animation:fadeIn 0.2s ease';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2000);
+}
+
+let _forwardContent = '';
+function openForwardModal() {
+  closeMsgContextMenu();
+  _forwardContent = _selectedMsgContent.replace(/<[^>]*>/g, '').trim();
+  // Afficher la liste des contacts et groupes pour transférer
+  const overlay = document.createElement('div');
+  overlay.id = 'forward-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:50000;display:flex;align-items:center;justify-content:center;padding:16px';
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:16px;width:100%;max-width:360px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden';
+  modal.innerHTML = '<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between"><h3 style="font-size:15px;font-weight:700;margin:0">↗️ Transférer à</h3><button onclick="closeForwardModal()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer">✕</button></div>'
+    + '<div style="padding:8px 12px;border-bottom:1px solid var(--border)"><input type="text" id="forward-search" placeholder="Rechercher..." oninput="filterForwardList()" style="width:100%;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-family:inherit"></div>'
+    + '<div id="forward-list" style="flex:1;overflow-y:auto;padding:4px 0"></div>'
+    + '<div style="padding:10px 12px;border-top:1px solid var(--border);background:var(--bg3);font-size:11px;color:var(--text2);max-height:40px;overflow:hidden">' + escHtml(_forwardContent.substring(0, 60)) + ((_forwardContent.length > 60) ? '...' : '') + '</div>';
+  overlay.appendChild(modal);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeForwardModal(); });
+  document.body.appendChild(overlay);
+  loadForwardList();
+}
+
+function closeForwardModal() {
+  const ov = document.getElementById('forward-overlay');
+  if (ov) ov.remove();
+}
+
+async function loadForwardList() {
+  const list = document.getElementById('forward-list');
+  if (!list) return;
+  list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">Chargement...</div>';
+  try {
+    const sbH = { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY };
+    // Charger les contacts récents
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_messages?or=(sender_id.eq.' + me.id + ',receiver_id.eq.' + me.id + ')&order=created_at.desc&limit=50&select=sender_id,receiver_id', { headers: sbH });
+    const msgs = await r.json();
+    const otherIds = [...new Set((msgs || []).map(m => m.sender_id === me.id ? m.receiver_id : m.sender_id).filter(id => id && id !== me.id && !id.startsWith('group_')))];
+    let html = '';
+    // Contacts
+    if (otherIds.length > 0) {
+      const idsFilter = otherIds.slice(0, 10).map(id => 'id.eq.' + id).join(',');
+      const ur = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?or=(' + idsFilter + ')&select=id,name,phone,avatar', { headers: sbH });
+      const users = await ur.json();
+      if (Array.isArray(users)) {
+        html += users.map(u => {
+          const av = u.avatar ? '<img src="' + u.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">' : (u.name || u.phone || '?').charAt(0).toUpperCase();
+          return '<div onclick="forwardTo(\'' + u.id + '\',\'' + (u.name || '').replace(/'/g, '') + '\',false)" class="chat-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" data-name="' + (u.name || u.phone || '').toLowerCase() + '">'
+            + '<div class="chat-avatar" style="width:36px;height:36px;font-size:14px;overflow:hidden">' + av + '</div>'
+            + '<div class="chat-item-info"><div class="chat-item-name" style="font-size:13px">' + (u.name || u.phone || 'Contact') + '</div></div></div>';
+        }).join('');
+      }
+    }
+    // Groupes (sauf Co-Construction)
+    const gr = await fetch(SUPA_FB_URL + '/rest/v1/konekta_group_members?user_id=eq.' + me.id + '&select=group_id,konekta_groups(id,name,avatar,group_type)', { headers: sbH });
+    const grRows = await gr.json();
+    if (Array.isArray(grRows)) {
+      const groups = grRows.filter(g => g.konekta_groups && g.konekta_groups.group_type !== 'coconstruction');
+      if (groups.length > 0) {
+        html += '<div style="padding:6px 14px;font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;background:var(--bg3)">Groupes</div>';
+        html += groups.map(g => {
+          const grp = g.konekta_groups;
+          return '<div onclick="forwardTo(\'group_' + grp.id + '\',\'' + (grp.name || '').replace(/'/g, '') + '\',true)" class="chat-item" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border)" data-name="' + (grp.name || '').toLowerCase() + '">'
+            + '<div class="chat-avatar" style="width:36px;height:36px;font-size:14px">' + (grp.avatar || '👥') + '</div>'
+            + '<div class="chat-item-info"><div class="chat-item-name" style="font-size:13px">' + (grp.name || 'Groupe') + '</div><div style="font-size:11px;color:var(--text2)">👥 Groupe</div></div></div>';
+        }).join('');
+      }
+    }
+    list.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--text2)">Aucun contact</div>';
+  } catch(e) { list.innerHTML = '<div style="padding:20px;color:var(--text2)">Erreur</div>'; }
+}
+
+function filterForwardList() {
+  const q = (document.getElementById('forward-search')?.value || '').toLowerCase();
+  document.querySelectorAll('#forward-list .chat-item').forEach(el => {
+    el.style.display = !q || (el.dataset.name || '').includes(q) ? '' : 'none';
+  });
+}
+
+async function forwardTo(userId, name, isGroup) {
+  const chatId = getChatId(me.id, userId);
+  const receiverId = isGroup ? me.id : userId;
+  try {
+    await fetch(SUPA_FB_URL + '/rest/v1/konekta_messages', {
+      method: 'POST',
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: receiverId, type: 'text', content: '↗️ Message transféré :\n' + _forwardContent })
+    });
+    closeForwardModal();
+    showToast('Transféré à ' + name);
+  } catch(e) { alert('Erreur: ' + e.message); }
 }
 
 function escHtml(s) {
