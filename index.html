@@ -1468,6 +1468,11 @@ function showLoginStep() {
 function showRegisterStep() {
   _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-register' ? 'block' : 'none'; });
   document.getElementById('register-msg').textContent = '';
+  document.getElementById('register-name').value = '';
+  document.getElementById('register-phone').value = '';
+  document.getElementById('register-q1').value = '';
+  document.getElementById('register-q2').value = '';
+  document.getElementById('register-q3').value = '';
 }
 
 // --- CONNEXION avec numéro virtuel + code ---
@@ -1564,6 +1569,9 @@ function showForgotStep() {
   _loginSteps.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = id === 'step-forgot' ? 'block' : 'none'; });
   document.getElementById('forgot-msg').textContent = '';
   document.getElementById('forgot-phone').value = '';
+  document.getElementById('forgot-q1').value = '';
+  document.getElementById('forgot-q2').value = '';
+  document.getElementById('forgot-q3').value = '';
 }
 
 async function recoverCredentials() {
