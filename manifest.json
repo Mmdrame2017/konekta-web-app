@@ -1,0 +1,20 @@
+{
+  "name": "Konekta — Super App Africaine",
+  "short_name": "Konekta",
+  "description": "Chat, Appels, Paiement Wave, Marketplace, Co-Construction",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#111B21",
+  "theme_color": "#00A884",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "communication", "social"],
+  "lang": "fr"
+}
