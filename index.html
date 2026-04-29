@@ -5069,7 +5069,7 @@ async function apiFetch(path, method='GET', body=null) {
     opts.signal = controller.signal;
     const res = await fetch(`${API}${path}`, opts);
     clearTimeout(timeout);
-    if (res.status === 401) { logout(); return; }
+    if (res.status === 401 && token && !token.startsWith('knk_')) { logout(); return; }
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || `Erreur ${res.status}`);
     return data;
