@@ -3428,7 +3428,7 @@ function enhanceNotesPollWithTranslation() {
   clearInterval(_meetingNotesPoll);
   let lastCount = 0;
   _meetingNotesPoll = setInterval(async () => {
-    if (!_currentMeetingSession) { clearInterval(_meetingNotesPoll); return; }
+    if (!_currentMeetingSession || !_currentMeetingSession.id) { clearInterval(_meetingNotesPoll); return; }
     try {
       const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes?session_id=eq.' + _currentMeetingSession.id + '&order=created_at.asc&select=*', {
         headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
@@ -3608,6 +3608,13 @@ async function startMeeting() {
       body: JSON.stringify({ group_id: _currentGroupId, title, agenda, started_by: me.id, jitsi_room: roomId, participants: [{ user_id: me.id, name: me.name || me.phone, joined_at: new Date().toISOString() }], speech_enabled: speechEnabled })
     });
     const data = await res.json();
+    if (!res.ok || !data || (Array.isArray(data) ? !data[0]?.id : !data.id)) {
+      const errMsg = (data && data.message) ? data.message : 'Erreur création session (HTTP ' + res.status + ')';
+      console.error('[MEETING] Échec création session:', data);
+      alert('Impossible de démarrer la réunion : ' + errMsg);
+      btn.disabled = false; btn.textContent = '🎬 Démarrer';
+      return;
+    }
     _currentMeetingSession = Array.isArray(data) ? data[0] : data;
     _meetingStartTime = Date.now();
     closeModal('modal-pre-meeting');
@@ -3632,6 +3639,12 @@ async function startMeeting() {
     _mySpeechLang = meetingLang;
     _myLanguage = meetingLang.split('-')[0];
     _translationEnabled = document.getElementById('meeting-translation-enabled').checked;
+    // Auto-activer le TTS si la traduction est activée (sinon personne n'entend la trad)
+    if (_translationEnabled) {
+      _ttsEnabled = true;
+      const ttsBtn = document.getElementById('meeting-tts-toggle');
+      if (ttsBtn) { ttsBtn.textContent = '🔊'; ttsBtn.style.background = '#00A884'; }
+    }
     if (speechEnabled) startSpeechTranscription();
     // Activer traduction dans le polling
     if (_translationEnabled || speechEnabled) {
@@ -3698,7 +3711,7 @@ function startMeetingNotesPoll() {
   if (_meetingNotesPoll) clearInterval(_meetingNotesPoll);
   let lastCount = 0;
   _meetingNotesPoll = setInterval(async () => {
-    if (!_currentMeetingSession) { clearInterval(_meetingNotesPoll); return; }
+    if (!_currentMeetingSession || !_currentMeetingSession.id) { clearInterval(_meetingNotesPoll); return; }
     try {
       const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_meeting_notes?session_id=eq.' + _currentMeetingSession.id + '&order=created_at.asc&select=*', {
         headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
@@ -3784,7 +3797,7 @@ function startSpeechTranscription() {
 
 function flushSpeechBuffer() {
   clearTimeout(_speechRestartTimer);
-  if (!_speechBuffer || !_currentMeetingSession) return;
+  if (!_speechBuffer || !_currentMeetingSession || !_currentMeetingSession.id) return;
   const text = _speechBuffer.trim();
   _speechBuffer = '';
   if (text.length <= 3) return;
