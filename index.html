@@ -960,9 +960,10 @@
   <!-- Barre supérieure avec timer + bouton Notes -->
   <div id="call-topbar" style="position:relative;z-index:2;background:#111B21;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div id="call-timer-bar" style="background:rgba(0,0,0,0.4);color:#fff;padding:4px 14px;border-radius:16px;font-family:monospace;font-size:0.85rem">00:00</div>
-    <div style="display:flex;gap:6px">
+    <div style="display:flex;gap:6px;align-items:center">
       <!-- Sélecteur de langue pour TOUS les participants -->
-      <select id="call-language-select" onchange="onCallLanguageChanged(this.value)" style="display:none;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:12px;padding:4px 8px;font-size:11px;font-family:inherit;cursor:pointer">
+      <span id="call-language-label" style="display:none;color:rgba(255,255,255,0.7);font-size:11px;font-weight:600">🌐 Ma langue :</span>
+      <select id="call-language-select" onchange="onCallLanguageChanged(this.value)" style="display:none;background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:12px;padding:5px 10px;font-size:12px;font-family:inherit;cursor:pointer;font-weight:600">
         <option value="fr" style="color:#000">🇫🇷 FR</option>
         <option value="en" style="color:#000">🇬🇧 EN</option>
         <option value="ar" style="color:#000">🇸🇦 AR</option>
@@ -2803,16 +2804,19 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   if (notesToggle) notesToggle.style.display = isCoCo ? 'inline-block' : 'none';
   // Toujours afficher le sélecteur de langue et TTS pour les appels de groupe
   if (isGroupRoom) {
-    const langSelect = document.getElementById('call-language-select');
-    if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
+    showCallLangSelect();
     const ttsBtn = document.getElementById('meeting-tts-toggle');
     if (ttsBtn) ttsBtn.style.display = 'inline-block';
+    // Toast pour rappeler au participant qu'il peut changer sa langue
+    setTimeout(() => { try { showToast('🌐 Sélectionnez "Ma langue" en haut si différente'); } catch(e) {} }, 1500);
     // Démarrer automatiquement la transcription après 3s
     setTimeout(() => {
       if (!_speechRecognition) {
-        _mySpeechLang = (_myLanguage || 'fr') === 'wo' ? 'wo' : (_myLanguage || 'fr') + '-' + (_myLanguage || 'fr').toUpperCase();
-        startSpeechTranscription();
+        const bcp = langToBCP47(_myLanguage || 'fr');
+        _mySpeechLang = bcp || 'fr-FR';
+        if (bcp) startSpeechTranscription();
         _translationEnabled = true;
+        _ttsEnabled = true;
         enhanceNotesPollWithTranslation();
       }
     }, 3000);
@@ -2835,8 +2839,7 @@ function launchJitsiEmbed(roomName, callType, displayName) {
           startSpeechTranscription();
           _translationEnabled = true;
           // Afficher le sélecteur de langue pour ce participant
-          const langSelect = document.getElementById('call-language-select');
-          if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
+          showCallLangSelect();
           const ttsBtn = document.getElementById('meeting-tts-toggle');
           if (ttsBtn) ttsBtn.style.display = 'inline-block';
           setTimeout(enhanceNotesPollWithTranslation, 2000);
@@ -3345,21 +3348,49 @@ let _ttsEnabled = false;
 let _lastSubtitleId = null;
 let _translationCache = {};
 
+// Mapping ISO 639-1 → BCP-47 valide pour Web Speech API (15 langues du select)
+// IMPORTANT : 'en-EN', 'ar-AR' sont INVALIDES — Chrome rejette silencieusement
+// ce qui causait l'absence totale de transcription côté appelé.
+// Wolof (wo) : Web Speech API ne le supporte pas → return null (pas de transcription possible,
+// mais la traduction reste disponible via mymemory.translated.net)
+function langToBCP47(lang) {
+  const map = {
+    fr: 'fr-FR', en: 'en-US', ar: 'ar-SA', es: 'es-ES', pt: 'pt-PT',
+    zh: 'zh-CN', de: 'de-DE', it: 'it-IT', tr: 'tr-TR', ru: 'ru-RU',
+    ja: 'ja-JP', ko: 'ko-KR', hi: 'hi-IN', sw: 'sw-KE',
+    wo: null
+  };
+  if (lang in map) return map[lang];
+  return lang + '-' + lang.toUpperCase();
+}
+
+// Affiche (avec son label) le sélecteur de langue d'appel — appelé depuis 3 endroits
+function showCallLangSelect() {
+  const langSelect = document.getElementById('call-language-select');
+  const langLabel = document.getElementById('call-language-label');
+  if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
+  if (langLabel) { langLabel.style.display = 'inline-block'; }
+}
+
 function onCallLanguageChanged(lang) {
   _myLanguage = lang;
-  _mySpeechLang = lang === 'wo' ? 'wo' : lang + '-' + lang.toUpperCase();
+  _mySpeechLang = langToBCP47(lang);
   _translationEnabled = true;
+  _ttsEnabled = true;
   localStorage.setItem('knk_lang', lang);
   // Redémarrer la transcription avec la nouvelle langue si active
   if (_speechRecognition) {
     stopSpeechTranscription();
     setTimeout(startSpeechTranscription, 500);
+  } else {
+    // Pas encore démarré (cas appelé qui n'a pas encore parlé) → démarrer maintenant
+    setTimeout(startSpeechTranscription, 200);
   }
   // Activer le polling traduction
   enhanceNotesPollWithTranslation();
   // Afficher le bouton TTS
   const ttsBtn = document.getElementById('meeting-tts-toggle');
-  if (ttsBtn) ttsBtn.style.display = 'inline-block';
+  if (ttsBtn) { ttsBtn.style.display = 'inline-block'; ttsBtn.textContent = '🔊'; ttsBtn.style.background = '#00A884'; }
 }
 
 function savePreferredLanguage(lang) {
@@ -3648,8 +3679,7 @@ async function startMeeting() {
     if (speechEnabled) startSpeechTranscription();
     // Activer traduction dans le polling
     if (_translationEnabled || speechEnabled) {
-      const langSelect = document.getElementById('call-language-select');
-      if (langSelect) { langSelect.style.display = 'inline-block'; langSelect.value = _myLanguage || 'fr'; }
+      showCallLangSelect();
       setTimeout(enhanceNotesPollWithTranslation, 2000);
       const ttsBtn = document.getElementById('meeting-tts-toggle');
       if (ttsBtn) ttsBtn.style.display = 'inline-block';
@@ -3736,11 +3766,17 @@ function startSpeechTranscription() {
     alert('Transcription non disponible sur ce navigateur (Chrome requis)');
     return;
   }
+  // Le wolof n'est pas supporté par Web Speech API
+  if (_myLanguage === 'wo' || _mySpeechLang === null || _mySpeechLang === 'wo') {
+    try { showToast('🎙️ Wolof non transcrit (limite navigateur), traduction OK'); } catch(e) {}
+    return;
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   _speechRecognition = new SR();
   _speechRecognition.continuous = true;
   _speechRecognition.interimResults = true;
   _speechRecognition.lang = _mySpeechLang || 'fr-FR';
+  console.log('[SPEECH] Démarrage transcription, lang =', _speechRecognition.lang);
   _speechRecognition.maxAlternatives = 1;
   _speechLastText = '';
   _speechBuffer = '';
