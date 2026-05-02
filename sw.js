@@ -74,13 +74,16 @@ self.addEventListener('push', event => {
 
   event.waitUntil((async () => {
     const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const visible = clientsList.find(c => c.visibilityState === 'visible');
-    if (visible) {
-      // App au premier plan : on délègue la sonnerie + UI au client, pas de notif système
-      visible.postMessage({ source: 'sw-push', payload: data });
-      return;
+    // Détection focus stricte : visibilityState='visible' ET focused=true
+    // (sur Android, visibilityState peut rester 'visible' alors que l'app est minimisée)
+    const focused = clientsList.find(c => c.focused === true && c.visibilityState === 'visible');
+    // Le client focused (s'il existe) affichera l'overlay immédiatement
+    if (focused) {
+      focused.postMessage({ source: 'sw-push', payload: data });
     }
-    // App en arrière-plan / fermée : notification système avec son + vibration
+    // On affiche TOUJOURS la notif système. C'est le seul moyen fiable
+    // de garantir que l'utilisateur voit l'appel quand l'app est en arrière-plan
+    // ou quand l'écran est verrouillé.
     await self.registration.showNotification(title, opts);
   })());
 });
