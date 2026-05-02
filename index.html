@@ -1513,6 +1513,124 @@ let prodPollToken = 0; // invalidate stale async callbacks on modal re-open
 // Enregistrer le Service Worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Réception des messages depuis le SW (push entrant + clic sur notification)
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const data = event.data || {};
+    if (data.source === 'sw-push' && data.payload && data.payload.type === 'incoming_call') {
+      // L'app est au premier plan : afficher l'UI d'appel entrant immédiatement
+      try {
+        showIncomingCall({
+          id: data.payload.call_id,
+          caller_id: data.payload.caller_id,
+          caller_name: data.payload.caller_name,
+          call_type: data.payload.call_type,
+          created_at: new Date(data.payload.ts || Date.now()).toISOString()
+        });
+      } catch(e) { console.warn('[SW-MSG] showIncomingCall failed', e); }
+    } else if (data.source === 'sw-notification-click') {
+      if (data.action === 'answer' && data.call_id) {
+        try { answerCall(data.call_id); } catch(e) { console.warn('[SW-MSG] answerCall failed', e); }
+      } else if (data.action === 'reject' && data.call_id) {
+        try { rejectCall(data.call_id); } catch(e) { console.warn('[SW-MSG] rejectCall failed', e); }
+      } else if (data.call_id) {
+        try {
+          showIncomingCall({
+            id: data.call_id,
+            caller_id: data.caller_id,
+            caller_name: data.caller_name,
+            call_type: data.call_type,
+            created_at: new Date().toISOString()
+          });
+        } catch(e) {}
+      }
+    }
+  });
+}
+
+// ─── Web Push : abonnement après login ───
+const _PUSH_API_BASE = '';   // même origine que la PWA (Vercel)
+let _pushSubscribed = false;
+
+function _urlBase64ToUint8Array(b64) {
+  const padding = '='.repeat((4 - b64.length % 4) % 4);
+  const base64 = (b64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function setupPushNotifications() {
+  if (_pushSubscribed) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    console.log('[PUSH] non supporté par ce navigateur');
+    return;
+  }
+  if (!me || !me.id) return;
+
+  try {
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm !== 'granted') { console.log('[PUSH] permission refusée'); return; }
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+
+    if (!sub) {
+      const r = await fetch(_PUSH_API_BASE + '/api/vapid-public');
+      if (!r.ok) { console.warn('[PUSH] /api/vapid-public failed'); return; }
+      const { publicKey } = await r.json();
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _urlBase64ToUint8Array(publicKey)
+      });
+    }
+
+    const subJson = sub.toJSON();
+    const resp = await fetch(_PUSH_API_BASE + '/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: me.id,
+        subscription: { endpoint: subJson.endpoint, keys: subJson.keys },
+        user_agent: (navigator.userAgent || '').slice(0, 200)
+      })
+    });
+    if (resp.ok) { _pushSubscribed = true; console.log('[PUSH] enregistré'); }
+    else console.warn('[PUSH] enregistrement échoué', await resp.text());
+  } catch(e) {
+    console.warn('[PUSH] setup failed:', e.message || e);
+  }
+}
+
+async function sendPushIncomingCall(calleeId, callId, callerName, callType) {
+  if (!calleeId || !callId) return;
+  try {
+    await fetch(_PUSH_API_BASE + '/api/push-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callee_id: calleeId,
+        caller_id: me?.id || null,
+        caller_name: callerName || me?.name || me?.phone || 'Appelant',
+        call_id: callId,
+        call_type: callType
+      })
+    });
+  } catch(e) { console.warn('[PUSH] send failed:', e.message || e); }
+}
+
+// Gérer les paramètres ?call_action=... posés par le SW quand l'app est ouverte depuis une notification
+function _handleCallActionFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('call_action');
+    const callId = params.get('call_id');
+    if (!action || !callId) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (action === 'answer') setTimeout(() => { try { answerCall(callId); } catch(e) {} }, 800);
+    else if (action === 'reject') setTimeout(() => { try { rejectCall(callId); } catch(e) {} }, 400);
+  } catch(e) {}
 }
 
 window.onload = () => {
@@ -1777,6 +1895,9 @@ function showApp() {
   // Écouter les appels entrants
   startIncomingCallPoll();
   startUpcomingMeetingPoll();
+  // Activer Web Push (sonnerie en arrière-plan / écran éteint)
+  setupPushNotifications();
+  _handleCallActionFromUrl();
 }
 
 async function handleKonektaPaymentReturn() {
@@ -3054,6 +3175,10 @@ async function openCallRoom(callType) {
         });
         const callData = await callRes.json();
         _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+        // Web Push à chaque membre (réveille les téléphones en arrière-plan)
+        const inserted = Array.isArray(callData) ? callData : [callData];
+        const grpName = (currentChat.name || '') + ' (groupe)';
+        inserted.forEach(c => sendPushIncomingCall(c.callee_id, c.id, grpName, callType));
       }
     } catch(e) { console.error('[CALL-OUT] Erreur groupe:', e); }
   } else {
@@ -3065,6 +3190,8 @@ async function openCallRoom(callType) {
     });
     const callData = await callRes.json();
     _currentCallId = Array.isArray(callData) ? callData[0].id : callData.id;
+    // Web Push pour réveiller le destinataire
+    sendPushIncomingCall(currentChat.userId, _currentCallId, me.name || me.phone || '', callType);
   }
 
   // 2. Lancer Jitsi embarqué dans l'overlay
