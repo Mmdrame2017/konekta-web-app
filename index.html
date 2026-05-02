@@ -1516,8 +1516,8 @@ if ('serviceWorker' in navigator) {
   // Réception des messages depuis le SW (push entrant + clic sur notification)
   navigator.serviceWorker.addEventListener('message', (event) => {
     const data = event.data || {};
+    console.log('[SW-MSG] received:', data.source, data.action || data.payload?.type);
     if (data.source === 'sw-push' && data.payload && data.payload.type === 'incoming_call') {
-      // L'app est au premier plan : afficher l'UI d'appel entrant immédiatement
       try {
         showIncomingCall({
           id: data.payload.call_id,
@@ -1527,6 +1527,8 @@ if ('serviceWorker' in navigator) {
           created_at: new Date(data.payload.ts || Date.now()).toISOString()
         });
       } catch(e) { console.warn('[SW-MSG] showIncomingCall failed', e); }
+      // Filet de sécurité : re-check Supabase 600ms après pour garantir un overlay correct
+      setTimeout(() => { try { checkRingingCallNow(); } catch(e) {} }, 600);
     } else if (data.source === 'sw-notification-click') {
       if (data.action === 'answer' && data.call_id) {
         try { answerCall(data.call_id); } catch(e) { console.warn('[SW-MSG] answerCall failed', e); }
@@ -1542,6 +1544,7 @@ if ('serviceWorker' in navigator) {
             created_at: new Date().toISOString()
           });
         } catch(e) {}
+        setTimeout(() => { try { checkRingingCallNow(); } catch(e) {} }, 600);
       }
     }
   });
@@ -2724,33 +2727,18 @@ let _callSignalPoll = null;
 let _ringtoneAudio = null;
 let _ringtoneVibrate = null;
 
-// Sonnerie via Notification API (son système du téléphone)
+// Sonnerie locale (vibration + Web Audio). PAS de Notification API ici :
+// les notifs système sont gérées par le Service Worker sur push.
 function playRingtone(type) {
   stopRingtone();
   console.log('[RING] Playing ringtone:', type);
-  // 1. Notification avec son système (le plus fiable sur mobile)
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(type === 'incoming' ? 'Appel entrant' : 'Appel en cours...', {
-        body: 'Konekta',
-        tag: 'konekta-call',
-        requireInteraction: true,
-        vibrate: [400, 200, 400, 200, 400]
-      });
-    } catch(e) {}
-  } else if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-  // 2. Vibration
+  // 1. Vibration (mobile)
   if (navigator.vibrate) {
     navigator.vibrate([400, 200, 400, 1500]);
     _ringtoneVibrate = setInterval(() => { try { navigator.vibrate([400, 200, 400, 1500]); } catch(e) {} }, 2500);
   }
-  // 3. Audio element (plus fiable que AudioContext sur mobile)
+  // 2. Web Audio (loop bip-bip)
   try {
-    const audio = new Audio();
-    audio.loop = true;
-    // Générer un son de sonnerie en base64 (bip-bip court)
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
     const duration = 2.0;
@@ -2770,6 +2758,8 @@ function playRingtone(type) {
     src.start();
     _ringtoneAudio = { stop: () => { try { src.stop(); ctx.close(); } catch(e) {} } };
   } catch(e) { console.log('[RING] Audio failed:', e.message); }
+  // 3. Sécurité : auto-stop après 35s pour éviter sonnerie infinie
+  setTimeout(() => { stopRingtone(); }, 35000);
 }
 function stopRingtone() {
   if (_ringtoneAudio) { _ringtoneAudio.stop(); _ringtoneAudio = null; }
@@ -3094,21 +3084,53 @@ function startIncomingCallPoll() {
   }, 2500);
 }
 
+// Quand l'app redevient visible (retour au premier plan après push), check immédiat
+// pour re-afficher l'overlay si un appel ringe encore.
+async function checkRingingCallNow() {
+  if (!me || !me.id) return;
+  if (_currentCallId && window._jitsiApi) return;
+  try {
+    const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_calls?callee_id=eq.' + me.id + '&status=eq.ringing&order=created_at.desc&limit=1', {
+      headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY }
+    });
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length > 0) {
+      const call = rows[0];
+      const age = Date.now() - new Date(call.created_at).getTime();
+      if (age < 60000) {
+        console.log('[VISIBILITY] Ringing call détecté, affichage overlay');
+        showIncomingCall(call);
+      }
+    }
+  } catch(e) { console.warn('[VISIBILITY] check failed:', e.message); }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    checkRingingCallNow();
+  }
+});
+
 let _incomingCallCheckTimer = null;
 
 function showIncomingCall(call) {
-  if (_currentCallId && window._jitsiApi) return; // Vraiment en appel
+  if (_currentCallId && window._jitsiApi) return; // Vraiment en appel actif (Jitsi en cours)
   _currentCallId = null; // Reset si pas d'appel actif
-  if (document.getElementById('incoming-call')?.dataset.callId === call.id) return;
   console.log('[INCOMING] Affichage notification pour', call.caller_name, call.id);
-  playRingtone('incoming');
+  // Si l'overlay existait déjà pour cet appel, on s'assure simplement qu'il est visible
+  // (le polling et le push peuvent appeler showIncomingCall plusieurs fois)
   let inDiv = document.getElementById('incoming-call');
+  const sameCall = inDiv && inDiv.dataset.callId === call.id;
+  if (!sameCall) {
+    // Nouveau call ou pas d'overlay : on (re)joue la sonnerie
+    playRingtone('incoming');
+  }
   if (!inDiv) {
     inDiv = document.createElement('div');
     inDiv.id = 'incoming-call';
     document.body.appendChild(inDiv);
   }
-  inDiv.style.cssText = 'position:fixed;inset:0;z-index:20000;background:linear-gradient(180deg,#111B21 0%,#000 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px';
+  inDiv.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:linear-gradient(180deg,#111B21 0%,#000 100%);display:flex !important;flex-direction:column;align-items:center;justify-content:center;gap:24px;visibility:visible;opacity:1';
   inDiv.dataset.callId = call.id;
   const icon = call.call_type === 'video' ? '\uD83D\uDCF9' : '\uD83D\uDCDE';
   const initial = (call.caller_name||'?').charAt(0).toUpperCase();
