@@ -3986,7 +3986,7 @@ async function startDeepgramStream(token) {
   const lang = (_myLanguage || 'fr');
   // Modèle multilingue Nova-2 (FR, EN, AR, ES, etc.) avec auto-punctuation
   const params = new URLSearchParams({
-    model: 'nova-2-general',
+    model: 'nova-3',
     language: lang === 'zh' ? 'zh-CN' : lang === 'sw' ? 'sw' : lang,
     punctuate: 'true',
     interim_results: 'false',
