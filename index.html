@@ -4336,16 +4336,71 @@ function attachFile() {
   document.getElementById('file-attach-input').click();
 }
 
-function onFileAttached(input) {
+async function onFileAttached(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
-  const name = file.name;
-  const size = (file.size / 1024).toFixed(0) + ' Ko';
-  if (currentChat) {
-    const chatInput = document.getElementById('chat-input');
-    if (chatInput) { chatInput.value = '📎 ' + name + ' (' + size + ')'; sendMessage(); }
+  const fileRef = input;
+  if (!currentChat) { fileRef.value = ''; return; }
+  // Limite raisonnable : 10 Mo (Supabase free tier accepte 50 Mo mais on évite de saturer le chat)
+  if (file.size > 10 * 1024 * 1024) {
+    try { showToast('⚠️ Fichier trop lourd (max 10 Mo)'); } catch(e) { alert('Fichier trop lourd (max 10 Mo)'); }
+    fileRef.value = '';
+    return;
   }
-  input.value = '';
+  const fileName = file.name;
+  const fileSize = file.size;
+  const fileMime = file.type || 'application/octet-stream';
+  // Toast d'upload
+  try { showToast('📎 Upload en cours…'); } catch(e) {}
+  try {
+    const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
+    const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+    // Nom unique : chat/<chatId>/<timestamp>-<rand>.<ext>
+    const dot = fileName.lastIndexOf('.');
+    const ext = dot >= 0 ? fileName.slice(dot + 1).toLowerCase() : 'bin';
+    const safeName = fileName.replace(/[^\w.\-]/g, '_').slice(0, 80);
+    const path = 'chat/' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + safeName;
+    const upRes = await fetch(sbUrl + '/storage/v1/object/konekta-images/' + path, {
+      method: 'POST',
+      headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': fileMime, 'x-upsert': 'true' },
+      body: file
+    });
+    if (!upRes.ok) {
+      const err = await upRes.text();
+      console.warn('[ATTACH] upload failed:', upRes.status, err);
+      try { showToast('❌ Upload échoué (HTTP ' + upRes.status + ')'); } catch(e) {}
+      fileRef.value = '';
+      return;
+    }
+    const publicUrl = sbUrl + '/storage/v1/object/public/konekta-images/' + path;
+    const payload = JSON.stringify({ url: publicUrl, name: fileName, size: fileSize, mime: fileMime });
+    await sendMessage({ type: 'file', content: payload });
+    try { showToast('✅ Fichier envoyé'); } catch(e) {}
+  } catch (e) {
+    console.warn('[ATTACH] error:', e);
+    try { showToast('❌ Erreur upload : ' + (e.message || e)); } catch(err) {}
+  }
+  fileRef.value = '';
+}
+
+// Helper : icône emoji selon le mime
+function _fileIconFromMime(mime) {
+  if (!mime) return '📎';
+  if (mime.startsWith('image/')) return '🖼️';
+  if (mime.startsWith('video/')) return '🎬';
+  if (mime.startsWith('audio/')) return '🎵';
+  if (mime.includes('pdf')) return '📄';
+  if (mime.includes('word') || mime.includes('document')) return '📝';
+  if (mime.includes('sheet') || mime.includes('excel')) return '📊';
+  if (mime.includes('presentation') || mime.includes('powerpoint')) return '📈';
+  if (mime.includes('zip') || mime.includes('rar') || mime.includes('compressed')) return '🗜️';
+  return '📎';
+}
+
+function _formatFileSize(bytes) {
+  if (!bytes || bytes < 1024) return (bytes || 0) + ' o';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' Ko';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
 }
 
 // ════════════════════════════════════════════════════════════
@@ -4770,6 +4825,30 @@ function appendMessage(msg, isHistory=false) {
       </div>
       <div class="msg-time">${time}</div>
     </div>`;
+  } else if (msg.type === 'file' || msg.type === 'attachment') {
+    let fileData = {};
+    try { fileData = JSON.parse(msg.content); } catch(e) {}
+    const url = fileData.url || '';
+    const name = fileData.name || 'fichier';
+    const size = _formatFileSize(fileData.size);
+    const mime = fileData.mime || '';
+    const icon = _fileIconFromMime(mime);
+    // Aper\u00E7u image : afficher la miniature en plus du lien
+    const isImage = mime && mime.startsWith('image/');
+    const preview = isImage && url
+      ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" style="display:block;margin-bottom:6px"><img src="${escHtml(url)}" alt="${escHtml(name)}" style="max-width:240px;max-height:240px;border-radius:8px;display:block"></a>`
+      : '';
+    html = `<div class="msg-bubble ${isSent?'sent':'recv'}" style="padding:8px 12px">
+      ${preview}
+      <a href="${escHtml(url)}" target="_blank" rel="noopener" download="${escHtml(name)}" style="display:flex;align-items:center;gap:10px;min-width:200px;text-decoration:none;color:inherit">
+        <div style="font-size:24px;flex-shrink:0">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(name)}</div>
+          <div style="font-size:11px;opacity:0.7">${size} \u00B7 Cliquer pour ouvrir</div>
+        </div>
+      </a>
+      <div class="msg-time">${time}</div>
+    </div>`;
   } else {
     const content = msg.content || '';
     html = `<div class="msg-bubble ${isSent?'sent':'recv'}">
@@ -4796,32 +4875,48 @@ function appendMessage(msg, isHistory=false) {
   if (!isHistory) area.scrollTop = area.scrollHeight;
 }
 
-async function sendMessage() {
+async function sendMessage(opts) {
   if (!currentChat) return;
+  const isGroup = !!currentChat.isGroup;
   const input = document.getElementById('chat-input');
-  const content = input.value.trim();
-  if (!content) return;
-  input.value = '';
+  // Mode "send arbitrary content" (utilisé par onFileAttached) ou mode "lire le textarea"
+  const type = (opts && opts.type) || 'text';
+  let content;
+  if (opts && opts.content !== undefined) {
+    content = opts.content;
+  } else {
+    content = input.value.trim();
+    if (!content) return;
+    input.value = '';
+  }
   const chatId = getChatId(me.id, currentChat.userId);
+  // Pour un groupe, receiver_id doit être null (la colonne attend un uuid)
+  // et on renseigne group_id à la place. La colonne userId="group_xxx" sert juste
+  // de discriminator côté UI mais n'est PAS un uuid valide pour Postgres.
+  const receiverIdForDB = isGroup ? null : currentChat.userId;
+  const groupIdForDB = isGroup ? (currentChat.groupId || null) : null;
+
   const msg = {
-    chatId, receiverId: currentChat.userId, type: 'text', content,
+    chatId, receiverId: currentChat.userId, type, content,
     senderId: me.id, createdAt: new Date().toISOString()
   };
   appendMessage({ ...msg, sender_id: me.id, created_at: msg.createdAt }, false);
   try {
-    await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type: 'text', content });
+    await apiFetch('/messages', 'POST', { chatId, receiverId: currentChat.userId, type, content });
     if (socket) socket.emit('sendMessage', { ...msg, receiverId: currentChat.userId });
   } catch(apiErr) {
-    // Fallback Supabase
+    // Fallback Supabase REST
     try {
       const sbUrl = 'https://dcnqauxppjusyinxqrgj.supabase.co';
       const sbKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbnFhdXhwcGp1c3lpbnhxcmdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExMDU4NDEsImV4cCI6MjA4NjY4MTg0MX0.7ejSMgJ4W0mZeqJNanXLpdxH9_WoYk0M5HxB3U9JhJQ';
+      const body = { chat_id: chatId, sender_id: me.id, receiver_id: receiverIdForDB, type, content };
+      if (groupIdForDB) body.group_id = groupIdForDB;
       await fetch(sbUrl + '/rest/v1/konekta_messages', {
         method: 'POST',
         headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-        body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'text', content })
+        body: JSON.stringify(body)
       });
-    } catch(e2) {}
+    } catch(e2) { console.warn('[MSG] Supabase fallback failed:', e2); }
   }
   loadChats();
 }
