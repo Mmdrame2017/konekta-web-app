@@ -2990,12 +2990,20 @@ function jitsiHangup() {
   }
   if (_callSeconds > 0 && currentChat) {
     const duration = Math.floor(_callSeconds / 60) + ':' + (_callSeconds % 60 < 10 ? '0' : '') + (_callSeconds % 60);
+    const isGroup = !!currentChat.isGroup;
     const chatId = getChatId(me.id, currentChat.userId);
     const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
+    const body = {
+      chat_id: chatId, sender_id: me.id,
+      receiver_id: isGroup ? null : currentChat.userId,
+      type: 'text',
+      content: '\uD83D\uDCDE Appel ' + (_currentCallType === 'video' ? 'vid\u00E9o' : 'vocal') + ' (' + duration + ')'
+    };
+    if (isGroup && currentChat.groupId) body.group_id = currentChat.groupId;
     fetch(sbUrl + '/rest/v1/konekta_messages', {
       method: 'POST',
       headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-      body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'text', content: '\uD83D\uDCDE Appel ' + (_currentCallType === 'video' ? 'vid\u00E9o' : 'vocal') + ' (' + duration + ')' })
+      body: JSON.stringify(body)
     }).catch(() => {});
   }
 }
@@ -4263,13 +4271,21 @@ function sendVoiceRecord() {
     reader.onloadend = async () => {
       const base64 = reader.result; // data:audio/webm;base64,...
       const duration = Math.floor(dur / 60) + ':' + (dur % 60 < 10 ? '0' : '') + (dur % 60);
+      const isGroup = !!currentChat.isGroup;
       const chatId = getChatId(me.id, currentChat.userId);
       const sbUrl = SUPA_FB_URL; const sbKey = SUPA_FB_KEY;
       try {
+        const body = {
+          chat_id: chatId, sender_id: me.id,
+          receiver_id: isGroup ? null : currentChat.userId,
+          type: 'voice',
+          content: JSON.stringify({ audio: base64, duration: duration })
+        };
+        if (isGroup && currentChat.groupId) body.group_id = currentChat.groupId;
         await fetch(sbUrl + '/rest/v1/konekta_messages', {
           method: 'POST',
           headers: { apikey: sbKey, Authorization: 'Bearer ' + sbKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-          body: JSON.stringify({ chat_id: chatId, sender_id: me.id, receiver_id: currentChat.userId, type: 'voice', content: JSON.stringify({ audio: base64, duration: duration }) })
+          body: JSON.stringify(body)
         });
         // Afficher localement
         appendAudioMessage(me.id, base64, duration);
