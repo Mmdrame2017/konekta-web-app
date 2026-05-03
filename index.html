@@ -2362,16 +2362,45 @@ function openEditNameModal() {
   openModal('modal-edit-name');
 }
 
+// Helper : update profile field — tente apiFetch puis fallback Supabase PATCH direct.
+// L'app n'a plus de backend localhost:3000 → l'apiFetch échoue toujours en prod
+// et le fallback Supabase est obligatoire.
+async function _updateMyProfile(patch, errMsg) {
+  if (!me || !me.id) return false;
+  try {
+    await apiFetch('/users/me', 'PUT', patch);
+  } catch(apiErr) {
+    // Fallback Supabase REST
+    try {
+      const r = await fetch(SUPA_FB_URL + '/rest/v1/konekta_users?id=eq.' + me.id, {
+        method: 'PATCH',
+        headers: { apikey: SUPA_FB_KEY, Authorization: 'Bearer ' + SUPA_FB_KEY, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify(patch)
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        console.warn('[PROFILE] Supabase PATCH failed:', r.status, t.slice(0, 200));
+        alert(errMsg || 'Erreur lors de la sauvegarde');
+        return false;
+      }
+    } catch(e2) {
+      console.warn('[PROFILE] Supabase fallback failed:', e2);
+      alert(errMsg || 'Erreur lors de la sauvegarde');
+      return false;
+    }
+  }
+  // Mise à jour locale + localStorage
+  Object.assign(me, patch);
+  localStorage.setItem('knk_user', JSON.stringify(me));
+  loadProfile();
+  return true;
+}
+
 async function saveName() {
   const name = document.getElementById('new-name-input').value.trim();
   if (!name) return;
-  try {
-    await apiFetch('/users/me', 'PUT', { name });
-    me.name = name;
-    localStorage.setItem('knk_user', JSON.stringify(me));
-    loadProfile();
-    closeModal('modal-edit-name');
-  } catch(e) {}
+  const ok = await _updateMyProfile({ name }, 'Erreur lors de la sauvegarde du nom');
+  if (ok) { try { showToast('✅ Nom mis à jour'); } catch(e) {} closeModal('modal-edit-name'); }
 }
 
 function openEditWaveModal() {
@@ -2381,13 +2410,8 @@ function openEditWaveModal() {
 
 async function saveWavePhone() {
   const wave_phone = document.getElementById('wave-phone-input').value.trim();
-  try {
-    await apiFetch('/users/me', 'PUT', { wave_phone: wave_phone || null });
-    me.wave_phone = wave_phone || null;
-    localStorage.setItem('knk_user', JSON.stringify(me));
-    loadProfile();
-    closeModal('modal-edit-wave');
-  } catch(e) { alert('Erreur lors de la sauvegarde'); }
+  const ok = await _updateMyProfile({ wave_phone: wave_phone || null }, 'Erreur lors de la sauvegarde du numéro Wave');
+  if (ok) { try { showToast('✅ Numéro Wave mis à jour'); } catch(e) {} closeModal('modal-edit-wave'); }
 }
 
 async function uploadAvatar(input) {
