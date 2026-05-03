@@ -1509,6 +1509,28 @@ let prodPollRef = null; // polling interval for marketplace payment
 let prodPollToken = 0; // invalidate stale async callbacks on modal re-open
 
 // ════════════════════════════════════════════════════════════
+//  CAPTURE MIC STREAM (avant que Jitsi ne le monopolise sur Android)
+// ════════════════════════════════════════════════════════════
+// Sur Android, Jitsi/WebRTC monopolise le mic en mode VOICE_COMMUNICATION.
+// SpeechRecognition ne peut pas accéder au mic en parallèle.
+// Solution : intercepter getUserMedia pour récupérer la track audio,
+// puis l'utiliser pour MediaRecorder → Cloud STT (Deepgram/Whisper).
+let _capturedAudioStream = null;
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  const _origGUM = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = async function(constraints) {
+    const stream = await _origGUM(constraints);
+    try {
+      if (constraints && constraints.audio && stream.getAudioTracks().length > 0) {
+        _capturedAudioStream = stream;
+        console.log('[STT] Mic stream captured (tracks:', stream.getAudioTracks().length, ')');
+      }
+    } catch(e) {}
+    return stream;
+  };
+}
+
+// ════════════════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════════════════
 // Enregistrer le Service Worker
@@ -3771,6 +3793,13 @@ let _speechWatchdog = null;
 let _speechErrorCount = 0;
 
 function startSpeechTranscription() {
+  // Sur mobile, Web Speech API ne fonctionne pas en parallèle de Jitsi (mic exclusif Android)
+  // → on bascule sur Cloud STT (Deepgram WebSocket avec fallback Whisper)
+  if (_isMobileDevice()) {
+    console.log('[SPEECH] Mobile détecté → Cloud STT (Deepgram/Whisper)');
+    startMobileCloudSTT();
+    return;
+  }
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     try { showToast('⚠️ Transcription : ce navigateur ne supporte pas Web Speech API'); } catch(e) {}
     return;
@@ -3897,10 +3926,196 @@ function stopSpeechTranscription() {
   if (_speechBuffer) flushSpeechBuffer();
   clearTimeout(_speechRestartTimer);
   if (_speechRecognition) { _speechRecognition.onend = null; try { _speechRecognition.stop(); } catch(e) {} _speechRecognition = null; }
+  stopMobileCloudSTT();
   const interim = document.getElementById('speech-interim');
   if (interim) interim.textContent = '';
   const bar = document.getElementById('meeting-speech-bar');
   if (bar) bar.style.display = 'none';
+}
+
+// ════════════════════════════════════════════════════════════
+//  CLOUD STT (mobile) — Deepgram streaming + fallback Whisper chunks
+// ════════════════════════════════════════════════════════════
+let _cloudSTT = null;          // { type, stop }
+let _cloudSTTRetryCount = 0;
+
+async function startMobileCloudSTT() {
+  if (_cloudSTT) return;
+  // Attendre que la mic stream soit capturée par notre intercepteur (Jitsi déjà lancé)
+  if (!_capturedAudioStream) {
+    if (_cloudSTTRetryCount++ < 20) {
+      setTimeout(startMobileCloudSTT, 500);
+    } else {
+      console.warn('[CLOUD-STT] Aucune mic stream capturée après 10s, abandon');
+      try { showToast('🎙️ Transcription mobile indisponible (micro non détecté)'); } catch(e) {}
+    }
+    return;
+  }
+  _cloudSTTRetryCount = 0;
+
+  const bar = document.getElementById('meeting-speech-bar');
+  if (bar) bar.style.display = 'flex';
+
+  // 1. Tentative Deepgram (streaming, latence < 300ms)
+  try {
+    const tokenRes = await fetch('/api/deepgram-token', { method: 'POST' });
+    if (!tokenRes.ok) throw new Error('Token endpoint HTTP ' + tokenRes.status);
+    const { token } = await tokenRes.json();
+    if (!token) throw new Error('Pas de token retourné');
+    await startDeepgramStream(token);
+    console.log('[CLOUD-STT] Deepgram streaming démarré');
+    return;
+  } catch (e) {
+    console.warn('[CLOUD-STT] Deepgram failed → fallback Whisper:', e.message || e);
+  }
+
+  // 2. Fallback : Whisper chunks de 5s (latence 5-8s)
+  startWhisperChunks();
+  console.log('[CLOUD-STT] Whisper chunks démarrés (fallback)');
+}
+
+async function startDeepgramStream(token) {
+  const lang = (_myLanguage || 'fr');
+  // Modèle multilingue Nova-2 (FR, EN, AR, ES, etc.) avec auto-punctuation
+  const params = new URLSearchParams({
+    model: 'nova-2-general',
+    language: lang === 'zh' ? 'zh-CN' : lang === 'sw' ? 'sw' : lang,
+    punctuate: 'true',
+    interim_results: 'false',
+    smart_format: 'true',
+    endpointing: '300'
+  });
+  const url = 'wss://api.deepgram.com/v1/listen?' + params.toString();
+
+  const ws = new WebSocket(url, ['token', token]);
+  let recorder = null;
+
+  ws.onopen = () => {
+    try {
+      const mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        console.warn('[DEEPGRAM] mimeType non supporté');
+        ws.close();
+        return;
+      }
+      recorder = new MediaRecorder(_capturedAudioStream, { mimeType, audioBitsPerSecond: 32000 });
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+          ws.send(e.data);
+        }
+      };
+      recorder.start(250); // chunks 250ms
+    } catch (e) {
+      console.warn('[DEEPGRAM] MediaRecorder failed:', e);
+      ws.close();
+    }
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      const alt = data.channel && data.channel.alternatives && data.channel.alternatives[0];
+      if (alt && alt.transcript && data.is_final) {
+        handleTranscriptFromCloud(alt.transcript);
+      } else if (alt && alt.transcript) {
+        const indicator = document.getElementById('speech-interim');
+        if (indicator) indicator.textContent = '🎙️ ' + alt.transcript;
+      }
+    } catch (e) {}
+  };
+
+  ws.onerror = (e) => { console.warn('[DEEPGRAM] WebSocket error', e); };
+  ws.onclose = () => {
+    console.log('[DEEPGRAM] WebSocket closed');
+    if (recorder && recorder.state !== 'inactive') { try { recorder.stop(); } catch(e) {} }
+    // Si fermé prématurément (pas par stopMobileCloudSTT), tenter de redémarrer
+    if (_cloudSTT && _cloudSTT.type === 'deepgram' && !_cloudSTT._stopping) {
+      setTimeout(() => { if (_cloudSTT && _cloudSTT.type === 'deepgram') { _cloudSTT = null; startMobileCloudSTT(); } }, 2000);
+    }
+  };
+
+  _cloudSTT = {
+    type: 'deepgram',
+    _stopping: false,
+    stop: () => {
+      _cloudSTT._stopping = true;
+      try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch(e) {}
+      try { ws.close(); } catch(e) {}
+    }
+  };
+}
+
+function startWhisperChunks() {
+  const mimeType = 'audio/webm;codecs=opus';
+  if (!('MediaRecorder' in window) || !MediaRecorder.isTypeSupported(mimeType)) {
+    try { showToast('⚠️ Transcription mobile non supportée par ce navigateur'); } catch(e) {}
+    return;
+  }
+  const recorder = new MediaRecorder(_capturedAudioStream, { mimeType, audioBitsPerSecond: 32000 });
+  let chunks = [];
+
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+
+  // Toutes les 5s, on flush les chunks accumulés vers Whisper
+  const flushInterval = setInterval(async () => {
+    if (chunks.length === 0) return;
+    const blob = new Blob(chunks, { type: mimeType });
+    chunks = [];
+    if (blob.size < 2000) return; // trop petit, on saute
+    try {
+      const lang = _myLanguage || 'fr';
+      const r = await fetch('/api/whisper-transcribe?lang=' + encodeURIComponent(lang), {
+        method: 'POST',
+        headers: { 'Content-Type': mimeType },
+        body: blob
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.warn('[WHISPER] HTTP', r.status, err.slice(0, 200));
+        return;
+      }
+      const data = await r.json();
+      if (data.text) handleTranscriptFromCloud(data.text);
+    } catch (e) { console.warn('[WHISPER] fetch failed:', e.message || e); }
+  }, 5000);
+
+  recorder.start(500);
+
+  _cloudSTT = {
+    type: 'whisper',
+    stop: () => {
+      clearInterval(flushInterval);
+      try { if (recorder.state !== 'inactive') recorder.stop(); } catch(e) {}
+    }
+  };
+}
+
+function handleTranscriptFromCloud(text) {
+  if (!text || text.trim().length < 3) return;
+  text = text.trim();
+  if (text === _speechLastText) return;
+  _speechLastText = text;
+  _speechHadResult = true;
+  // Réutilise la même logique que Web Speech (buffer + flush vers Supabase)
+  _speechBuffer += (_speechBuffer ? ' ' : '') + text;
+  if (_speechBuffer.match(/[.!?]$/) || _speechBuffer.length > 80) {
+    flushSpeechBuffer();
+  } else {
+    clearTimeout(_speechRestartTimer);
+    _speechRestartTimer = setTimeout(flushSpeechBuffer, 3000);
+  }
+  const indicator = document.getElementById('speech-interim');
+  if (indicator) indicator.textContent = '🎙️ ' + text;
+}
+
+function stopMobileCloudSTT() {
+  if (_cloudSTT) {
+    try { _cloudSTT.stop(); } catch(e) {}
+    _cloudSTT = null;
+  }
+  _cloudSTTRetryCount = 0;
 }
 
 // Fin de réunion — surcharge jitsiHangup
