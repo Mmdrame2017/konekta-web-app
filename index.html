@@ -3761,9 +3761,18 @@ let _speechLastText = '';
 let _speechRestartTimer = null;
 let _speechBuffer = '';
 
+// Détection mobile pour adapter le comportement (Jitsi prend plus de temps à init le mic sur mobile)
+function _isMobileDevice() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+}
+
+let _speechHadResult = false;
+let _speechWatchdog = null;
+let _speechErrorCount = 0;
+
 function startSpeechTranscription() {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    alert('Transcription non disponible sur ce navigateur (Chrome requis)');
+    try { showToast('⚠️ Transcription : ce navigateur ne supporte pas Web Speech API'); } catch(e) {}
     return;
   }
   // Le wolof n'est pas supporté par Web Speech API
@@ -3771,32 +3780,40 @@ function startSpeechTranscription() {
     try { showToast('🎙️ Wolof non transcrit (limite navigateur), traduction OK'); } catch(e) {}
     return;
   }
+  // Vérification permission micro avant de démarrer (évite l'échec silencieux sur mobile)
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'microphone' }).then(p => {
+      if (p.state === 'denied') {
+        try { showToast('🚫 Micro bloqué — autorisez-le dans les paramètres du site'); } catch(e) {}
+      }
+    }).catch(() => {});
+  }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   _speechRecognition = new SR();
   _speechRecognition.continuous = true;
   _speechRecognition.interimResults = true;
   _speechRecognition.lang = _mySpeechLang || 'fr-FR';
-  console.log('[SPEECH] Démarrage transcription, lang =', _speechRecognition.lang);
   _speechRecognition.maxAlternatives = 1;
   _speechLastText = '';
   _speechBuffer = '';
+  _speechHadResult = false;
+  _speechErrorCount = 0;
+  console.log('[SPEECH] Démarrage transcription, lang =', _speechRecognition.lang, 'mobile =', _isMobileDevice());
 
   _speechRecognition.onresult = (event) => {
+    _speechHadResult = true;
+    _speechErrorCount = 0;
     let interim = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript.trim();
       if (event.results[i].isFinal) {
-        // Éviter les doublons
         if (transcript === _speechLastText) continue;
         if (transcript.length <= 3) continue;
         _speechLastText = transcript;
-        // Accumuler dans un buffer pour regrouper les phrases courtes
         _speechBuffer += (_speechBuffer ? ' ' : '') + transcript;
-        // Envoyer quand le buffer contient une phrase complète (ponctuation ou > 80 chars)
         if (_speechBuffer.match(/[.!?]$/) || _speechBuffer.length > 80) {
           flushSpeechBuffer();
         } else {
-          // Auto-flush après 3s de silence
           clearTimeout(_speechRestartTimer);
           _speechRestartTimer = setTimeout(flushSpeechBuffer, 3000);
         }
@@ -3804,31 +3821,62 @@ function startSpeechTranscription() {
         interim += transcript;
       }
     }
-    // Afficher le texte intérimaire en temps réel
     const indicator = document.getElementById('speech-interim');
     if (indicator) indicator.textContent = interim ? '🎙️ ' + interim : '';
   };
 
   _speechRecognition.onerror = (e) => {
-    console.log('[SPEECH] Erreur:', e.error);
-    if (e.error === 'no-speech' || e.error === 'audio-capture') {
-      // Redémarrer silencieusement
-      setTimeout(() => { if (_speechRecognition) try { _speechRecognition.start(); } catch(e) {} }, 1000);
+    _speechErrorCount++;
+    console.warn('[SPEECH] Erreur:', e.error, 'count=', _speechErrorCount);
+    // Erreurs récupérables : retry
+    if (e.error === 'no-speech' || e.error === 'audio-capture' || e.error === 'aborted') {
+      const delay = _isMobileDevice() ? 2000 : 1000;
+      setTimeout(() => { if (_speechRecognition) try { _speechRecognition.start(); } catch(err) {} }, delay);
+      return;
+    }
+    // Erreurs critiques : afficher à l'utilisateur (1ère fois seulement)
+    if (_speechErrorCount === 1) {
+      const messages = {
+        'not-allowed': '🚫 Micro refusé — autorisez-le et rejoignez',
+        'network': '🌐 Service de transcription bloqué (essayez Chrome standard)',
+        'language-not-supported': '⚠️ Langue ' + _speechRecognition.lang + ' non supportée',
+        'service-not-allowed': '🚫 Service Speech bloqué par le navigateur'
+      };
+      try { showToast(messages[e.error] || ('⚠️ Speech: ' + e.error)); } catch(err) {}
+    }
+    // Retry quand même au cas où c'est transitoire
+    if (_speechErrorCount < 5) {
+      setTimeout(() => { if (_speechRecognition) try { _speechRecognition.start(); } catch(err) {} }, 3000);
     }
   };
 
   _speechRecognition.onend = () => {
-    // Flush le buffer restant
     if (_speechBuffer) flushSpeechBuffer();
-    // Redémarrer automatiquement (toutes les 30s la reco peut s'arrêter)
+    // Redémarrer automatiquement (Chrome arrête la reco toutes les ~30-60s)
     if (_speechRecognition) {
       setTimeout(() => { if (_speechRecognition) try { _speechRecognition.start(); } catch(e) {} }, 500);
     }
   };
 
-  _speechRecognition.start();
+  try {
+    _speechRecognition.start();
+  } catch(e) {
+    console.warn('[SPEECH] start() failed immédiatement:', e.message);
+    try { showToast('⚠️ Démarrage transcription échoué : ' + e.message); } catch(err) {}
+  }
+
   const bar = document.getElementById('meeting-speech-bar');
   if (bar) bar.style.display = 'flex';
+
+  // Watchdog : si aucun résultat après 25s (mobile) / 15s (desktop), prévenir l'utilisateur
+  clearTimeout(_speechWatchdog);
+  const watchdogDelay = _isMobileDevice() ? 25000 : 15000;
+  _speechWatchdog = setTimeout(() => {
+    if (!_speechHadResult && _speechRecognition) {
+      console.warn('[SPEECH] Aucun résultat après', watchdogDelay/1000, 's');
+      try { showToast('🎙️ Transcription silencieuse — vérifiez le micro Jitsi (non muté ?)'); } catch(e) {}
+    }
+  }, watchdogDelay);
 }
 
 function flushSpeechBuffer() {
