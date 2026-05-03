@@ -25,6 +25,7 @@ module.exports = async (req, res) => {
   const calleeId = body.callee_id;
   const callerName = (body.caller_name || 'Appelant').toString().slice(0, 80);
   const callerId = body.caller_id || null;
+  const callerAvatar = body.caller_avatar || null;  // URL ou data: pour l'icône notif
   const callId = body.call_id || null;
   const callType = body.call_type === 'video' ? 'video' : 'audio';
 
@@ -43,6 +44,7 @@ module.exports = async (req, res) => {
     call_id: callId,
     caller_id: callerId,
     caller_name: callerName,
+    caller_avatar: callerAvatar,
     call_type: callType,
     ts: Date.now()
   });

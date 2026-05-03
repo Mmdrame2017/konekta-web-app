@@ -46,18 +46,24 @@ self.addEventListener('push', event => {
 
   const callerName = data.caller_name || 'Appelant';
   const callType = data.call_type === 'video' ? 'vidéo' : 'vocal';
-  const title = '📞 Appel ' + callType + ' entrant';
-  const body = callerName + ' vous appelle…';
+  const callIcon = data.call_type === 'video' ? '📹' : '📞';
+  // Titre court et impactant — Android tronque ~50 chars sur lock screen
+  const title = callIcon + ' ' + callerName;
+  const body = 'Appel ' + callType + ' entrant — Konekta';
+
+  // Pattern vibration WhatsApp-like : long-pause-long, insistant ~6s
+  const whatsappVibrate = [0, 1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000];
 
   const opts = {
     body: body,
-    icon: '/logo.png',
-    badge: '/logo.png',
+    icon: data.caller_avatar || '/logo.png',
+    badge: '/logo.png',  // monochrome dans status bar Android
+    image: data.caller_avatar || undefined,  // grande image quand notif étendue
     tag: 'konekta-call-' + (data.call_id || 'x'),
     renotify: true,
-    requireInteraction: true,
+    requireInteraction: true,  // reste affichée jusqu'à action utilisateur
     silent: false,
-    vibrate: [600, 300, 600, 300, 600, 300, 600],
+    vibrate: whatsappVibrate,
     timestamp: data.ts || Date.now(),
     data: {
       type: 'incoming_call',
@@ -67,8 +73,8 @@ self.addEventListener('push', event => {
       call_type: data.call_type
     },
     actions: [
-      { action: 'answer', title: '✅ Accepter' },
-      { action: 'reject', title: '✖ Refuser' }
+      { action: 'answer', title: 'Accepter' },
+      { action: 'reject', title: 'Refuser' }
     ]
   };
 

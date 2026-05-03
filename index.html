@@ -1632,6 +1632,11 @@ async function setupPushNotifications() {
 async function sendPushIncomingCall(calleeId, callId, callerName, callType) {
   if (!calleeId || !callId) return;
   try {
+    // Si avatar = data URL trop lourde (>4KB), on n'envoie rien plutôt que de bloquer le push
+    let callerAvatar = me?.avatar || null;
+    if (callerAvatar && typeof callerAvatar === 'string' && callerAvatar.length > 4096) {
+      callerAvatar = null; // évite payload push trop gros (limite ~4KB sur certains push gateways)
+    }
     await fetch(_PUSH_API_BASE + '/api/push-send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1639,6 +1644,7 @@ async function sendPushIncomingCall(calleeId, callId, callerName, callType) {
         callee_id: calleeId,
         caller_id: me?.id || null,
         caller_name: callerName || me?.name || me?.phone || 'Appelant',
+        caller_avatar: callerAvatar,
         call_id: callId,
         call_type: callType
       })
@@ -2779,24 +2785,37 @@ let _ringtoneVibrate = null;
 function playRingtone(type) {
   stopRingtone();
   console.log('[RING] Playing ringtone:', type);
-  // 1. Vibration (mobile)
+  // 1. Vibration WhatsApp-like : long-pause-long, insistant et reconnaissable
+  // Cycle de ~6s : 5x [vibre 1s, pause 0.5s] puis répété
+  const whatsappPattern = [0, 1000, 500, 1000, 500, 1000, 500, 1000, 500, 1000];
   if (navigator.vibrate) {
-    navigator.vibrate([400, 200, 400, 1500]);
-    _ringtoneVibrate = setInterval(() => { try { navigator.vibrate([400, 200, 400, 1500]); } catch(e) {} }, 2500);
+    try { navigator.vibrate(whatsappPattern); } catch(e) {}
+    _ringtoneVibrate = setInterval(() => {
+      try { navigator.vibrate(whatsappPattern); } catch(e) {}
+    }, 6500);
   }
-  // 2. Web Audio (loop bip-bip)
+  // 2. Web Audio : sonnerie 2 tons (style téléphone classique)
+  // Note 880Hz (A5) → 988Hz (B5), 0.4s chacune avec petite pause, total ~2s loop
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
-    const duration = 2.0;
+    const duration = 2.5;
     const sr = ctx.sampleRate;
     const buf = ctx.createBuffer(1, sr * duration, sr);
     const data = buf.getChannelData(0);
     for (let i = 0; i < sr * duration; i++) {
       const t = i / sr;
-      if (t < 0.3) data[i] = 0.3 * Math.sin(2 * Math.PI * 440 * t);
-      else if (t > 0.5 && t < 0.8) data[i] = 0.3 * Math.sin(2 * Math.PI * 523 * t);
-      else data[i] = 0;
+      let sample = 0;
+      // Bip 1 : 880Hz pendant 0.4s
+      if (t < 0.4) sample = 0.35 * Math.sin(2 * Math.PI * 880 * t);
+      // Bip 2 : 988Hz pendant 0.4s (après 0.1s pause)
+      else if (t > 0.5 && t < 0.9) sample = 0.35 * Math.sin(2 * Math.PI * 988 * t);
+      // Pause 1.6s
+      // Enveloppe ADSR rapide pour éviter clics
+      const env = (t < 0.4) ? Math.min(1, t * 50) * Math.min(1, (0.4 - t) * 50)
+                : (t > 0.5 && t < 0.9) ? Math.min(1, (t - 0.5) * 50) * Math.min(1, (0.9 - t) * 50)
+                : 0;
+      data[i] = sample * env;
     }
     const src = ctx.createBufferSource();
     src.buffer = buf;
@@ -2805,7 +2824,7 @@ function playRingtone(type) {
     src.start();
     _ringtoneAudio = { stop: () => { try { src.stop(); ctx.close(); } catch(e) {} } };
   } catch(e) { console.log('[RING] Audio failed:', e.message); }
-  // 3. Sécurité : auto-stop après 35s pour éviter sonnerie infinie
+  // 3. Sécurité : auto-stop après 35s
   setTimeout(() => { stopRingtone(); }, 35000);
 }
 function stopRingtone() {
