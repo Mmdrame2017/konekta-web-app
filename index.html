@@ -1631,25 +1631,123 @@ async function setupPushNotifications() {
 
 async function sendPushIncomingCall(calleeId, callId, callerName, callType) {
   if (!calleeId || !callId) return;
+  let callerAvatar = me?.avatar || null;
+  if (callerAvatar && typeof callerAvatar === 'string' && callerAvatar.length > 4096) callerAvatar = null;
+  const payload = JSON.stringify({
+    callee_id: calleeId,
+    caller_id: me?.id || null,
+    caller_name: callerName || me?.name || me?.phone || 'Appelant',
+    caller_avatar: callerAvatar,
+    call_id: callId,
+    call_type: callType
+  });
+  // Envoie en parallèle Web Push (PWA navigateur) ET FCM (app Capacitor Android)
+  // Si l'utilisateur n'a qu'un canal abonné, l'autre retourne sent:0 sans erreur.
+  await Promise.allSettled([
+    fetch(_PUSH_API_BASE + '/api/push-send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload
+    }).catch(e => console.warn('[PUSH] web push send failed:', e.message || e)),
+    fetch(_PUSH_API_BASE + '/api/fcm-send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload
+    }).catch(e => console.warn('[PUSH] fcm send failed:', e.message || e))
+  ]);
+}
+
+// ─── Capacitor (app Android native) : FCM + IncomingCallKit avec FullScreenIntent ───
+// Ce code n'a d'effet QUE quand la PWA est embarquée dans le wrapper Capacitor.
+// En navigateur web standard, window.Capacitor est undefined → no-op.
+let _capacitorSetup = false;
+async function setupCapacitorNative() {
+  if (_capacitorSetup) return;
+  if (typeof window === 'undefined' || !window.Capacitor) return;
+  if (!window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+  if (!me || !me.id) return;
+  _capacitorSetup = true;
+
+  const { PushNotifications } = window.Capacitor.Plugins || {};
+  const { IncomingCallKit } = window.Capacitor.Plugins || {};
+
+  if (!PushNotifications) {
+    console.warn('[CAP] PushNotifications plugin manquant dans le bundle natif');
+    return;
+  }
+
   try {
-    // Si avatar = data URL trop lourde (>4KB), on n'envoie rien plutôt que de bloquer le push
-    let callerAvatar = me?.avatar || null;
-    if (callerAvatar && typeof callerAvatar === 'string' && callerAvatar.length > 4096) {
-      callerAvatar = null; // évite payload push trop gros (limite ~4KB sur certains push gateways)
+    // 1. Permissions notifs + FullScreenIntent
+    const perm = await PushNotifications.requestPermissions();
+    if (perm.receive !== 'granted') { console.warn('[CAP] notif refused'); return; }
+    if (IncomingCallKit && IncomingCallKit.requestFullScreenIntentPermission) {
+      try { await IncomingCallKit.requestFullScreenIntentPermission(); } catch(e) {}
     }
-    await fetch(_PUSH_API_BASE + '/api/push-send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        callee_id: calleeId,
-        caller_id: me?.id || null,
-        caller_name: callerName || me?.name || me?.phone || 'Appelant',
-        caller_avatar: callerAvatar,
-        call_id: callId,
-        call_type: callType
-      })
+    await PushNotifications.register();
+
+    // 2. Récupération du token FCM → upload vers Supabase via /api/fcm-subscribe
+    PushNotifications.addListener('registration', async (token) => {
+      try {
+        await fetch('/api/fcm-subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: me.id,
+            fcm_token: token.value,
+            device_info: (navigator.userAgent || '').slice(0, 200)
+          })
+        });
+        console.log('[CAP] FCM token enregistré');
+      } catch(e) { console.warn('[CAP] FCM enregistrement échoué', e); }
     });
-  } catch(e) { console.warn('[PUSH] send failed:', e.message || e); }
+
+    PushNotifications.addListener('registrationError', (err) => {
+      console.warn('[CAP] FCM registration error', err);
+    });
+
+    // 3. Push reçu en avant-plan (app ouverte) : on déclenche IncomingCallKit nous-mêmes
+    // (en background, le service natif Capacitor le fait déjà)
+    PushNotifications.addListener('pushNotificationReceived', async (notification) => {
+      const data = notification && notification.data;
+      if (!data || data.type !== 'incoming_call') return;
+      if (IncomingCallKit && IncomingCallKit.showIncomingCall) {
+        try {
+          await IncomingCallKit.showIncomingCall({
+            callId: data.call_id,
+            callerName: data.caller_name || 'Appelant',
+            callerAvatar: data.caller_avatar || undefined,
+            hasVideo: data.call_type === 'video',
+            android: { showFullScreen: true }
+          });
+        } catch(e) { console.warn('[CAP] showIncomingCall failed', e); }
+      }
+    });
+
+    // 4. Tap sur la notif (action utilisateur) : ouvre l'overlay d'appel entrant
+    PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+      const data = action && action.notification && action.notification.data;
+      if (!data || data.type !== 'incoming_call') return;
+      try {
+        showIncomingCall({
+          id: data.call_id,
+          caller_id: data.caller_id,
+          caller_name: data.caller_name,
+          call_type: data.call_type,
+          created_at: new Date().toISOString()
+        });
+      } catch(e) {}
+    });
+
+    // 5. Boutons Accept/Reject de la notif IncomingCallKit (FullScreenIntent)
+    if (IncomingCallKit && IncomingCallKit.addListener) {
+      IncomingCallKit.addListener('callAnswered', (e) => {
+        try { answerCall(e && e.callId); } catch(err) {}
+      });
+      IncomingCallKit.addListener('callRejected', (e) => {
+        try { rejectCall(e && e.callId); } catch(err) {}
+      });
+    }
+
+    console.log('[CAP] Native call notifications ready');
+  } catch(e) {
+    console.warn('[CAP] setup failed', e);
+  }
 }
 
 // Gérer les paramètres ?call_action=... posés par le SW quand l'app est ouverte depuis une notification
@@ -1929,6 +2027,8 @@ function showApp() {
   startUpcomingMeetingPoll();
   // Activer Web Push (sonnerie en arrière-plan / écran éteint)
   setupPushNotifications();
+  // Activer FCM + IncomingCallKit (n'agit que dans l'app Capacitor Android)
+  setupCapacitorNative();
   _handleCallActionFromUrl();
 }
 
