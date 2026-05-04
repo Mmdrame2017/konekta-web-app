@@ -1794,24 +1794,27 @@ async function toggleSpeakerphone() {
   if (!_isCapacitorNative() || !window.Capacitor.Plugins || !window.Capacitor.Plugins.AudioRoute) return;
   const AR = window.Capacitor.Plugins.AudioRoute;
   try {
-    // Re-synchronise notre état avec celui d'Android avant de basculer
-    // (Jitsi/WebRTC peut avoir modifié le speakerphone côté natif sans nous prévenir)
+    // Sync avec l'état Android réel (Jitsi peut avoir modifié sans prévenir)
     let actual = _speakerphoneOn;
     try {
       const status = await AR.getStatus();
       if (status && typeof status.speakerphoneOn === 'boolean') actual = status.speakerphoneOn;
     } catch(e) {}
     const next = !actual;
-    console.log('[AUDIO] toggleSpeakerphone actual=', actual, 'next=', next);
     const r = await AR.setSpeakerphoneOn({ enabled: next });
-    // Lit l'état RÉEL après set (peut différer de la cible si Android refuse)
     _speakerphoneOn = !!(r && r.speakerphoneOn);
     _renderSpeakerButton();
+    // Toast visible (debug sans USB) — affiche état réel + méthode utilisée
+    const real = r && r.speakerphoneOn ? '🔊 Main-libre' : '🔈 Discret';
+    const okFlag = (r && r.applied) ? '✅' : '⚠️';
+    const method = (r && r.method) || '?';
+    const sdk = (r && r.sdk) || '?';
+    try { showToast(okFlag + ' ' + real + ' (Android ' + sdk + ', ' + method + ')'); } catch(e) {}
     if (_speakerphoneOn !== next) {
-      console.warn('[AUDIO] Android n\'a pas appliqué le toggle (target=' + next + ', réel=' + _speakerphoneOn + ')');
+      console.warn('[AUDIO] Android n\'a pas appliqué le toggle (target=' + next + ', réel=' + _speakerphoneOn + ', detail=' + (r && r.detail) + ')');
     }
   } catch(e) {
-    console.warn('[AUDIO] toggleSpeakerphone failed', e);
+    try { showToast('❌ Erreur audio: ' + (e.message || e)); } catch(err) {}
   }
 }
 
