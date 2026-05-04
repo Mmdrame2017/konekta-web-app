@@ -5829,8 +5829,9 @@ let _marketRefreshTimer = null;
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${name}`));
-  const titles = { chat:'Messages', marketplace:'Marketplace', wallet:'Wallet', profile:'Profil' };
-  document.getElementById('topbar-title').textContent = titles[name] || 'Konekta';
+  // Le titre du topbar reste toujours "Konekta" (le nom de l'app, pas la section active).
+  // La section active est déjà indiquée par l'onglet sélectionné dans la sidebar
+  // et par le titre <h3> du panneau (ex: "Messages", "Marketplace").
   if (name === 'wallet') loadWallet();
   if (name === 'marketplace') { loadProducts(); startMarketRefresh(); }
   else stopMarketRefresh();
