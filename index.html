@@ -3134,7 +3134,26 @@ function launchJitsiEmbed(roomName, callType, displayName) {
         filmstrip: { disableStageFilmstrip: _currentGroupId ? false : true, disabled: _currentGroupId ? false : true },
         disableSelfView: _currentGroupId ? false : true,
         disableSelfViewSettings: true,
-        p2p: { enabled: false }
+        p2p: { enabled: false },
+        // ─── Audio processing : suppression d'écho + bruit + AGC ───
+        // Active explicitement les WebRTC media constraints pour anti-écho.
+        // Ces valeurs sont passées à getUserMedia côté browser/WebView.
+        disableAP: false,                 // garde le module Audio Processing actif
+        enableNoAudioDetection: true,     // détection silence pour gating
+        enableNoisyMicDetection: true,    // signale les micros bruyants
+        constraints: {
+          audio: {
+            echoCancellation: true,       // AEC explicit
+            noiseSuppression: true,       // NS explicit
+            autoGainControl: true,        // AGC explicit
+            googEchoCancellation: true,
+            googAutoGainControl: true,
+            googNoiseSuppression: true,
+            googHighpassFilter: true,
+            googTypingNoiseDetection: true
+          }
+        },
+        audioQuality: { stereo: false, opusMaxAverageBitrate: 32000 }
       },
       interfaceConfigOverwrite: {
         SHOW_JITSI_WATERMARK: false,
