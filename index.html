@@ -4191,37 +4191,53 @@ let _cloudSTTRetryCount = 0;
 
 async function startMobileCloudSTT() {
   if (_cloudSTT) return;
-  // Attendre que la mic stream soit capturée par notre intercepteur (Jitsi déjà lancé)
-  if (!_capturedAudioStream) {
-    if (_cloudSTTRetryCount++ < 20) {
-      setTimeout(startMobileCloudSTT, 500);
-    } else {
-      console.warn('[CLOUD-STT] Aucune mic stream capturée après 10s, abandon');
-      try { showToast('🎙️ Transcription mobile indisponible (micro non détecté)'); } catch(e) {}
-    }
-    return;
-  }
-  _cloudSTTRetryCount = 0;
+  try { showToast('🎙️ STT démarrage…'); } catch(e) {}
 
+  // Si pas de stream capturée par l'intercepteur (cas Capacitor : Jitsi est dans
+  // une iframe cross-origin, son getUserMedia n'est pas interceptable),
+  // on demande NOTRE PROPRE stream via getUserMedia parent.
+  if (!_capturedAudioStream) {
+    try {
+      try { showToast('🎙️ STT : demande micro…'); } catch(e) {}
+      _capturedAudioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      console.log('[CLOUD-STT] Mic stream demandée directement (' + _capturedAudioStream.getAudioTracks().length + ' tracks)');
+    } catch (err) {
+      console.warn('[CLOUD-STT] getUserMedia parent failed:', err.message || err);
+      try { showToast('❌ STT : micro refusé (' + (err.name || 'erreur') + ')'); } catch(e) {}
+      return;
+    }
+  }
+
+  _cloudSTTRetryCount = 0;
   const bar = document.getElementById('meeting-speech-bar');
   if (bar) bar.style.display = 'flex';
 
   // 1. Tentative Deepgram (streaming, latence < 300ms)
   try {
+    try { showToast('🎙️ STT : connexion Deepgram…'); } catch(e) {}
     const tokenRes = await fetch('/api/deepgram-token', { method: 'POST' });
     if (!tokenRes.ok) throw new Error('Token endpoint HTTP ' + tokenRes.status);
     const { token } = await tokenRes.json();
     if (!token) throw new Error('Pas de token retourné');
     await startDeepgramStream(token);
     console.log('[CLOUD-STT] Deepgram streaming démarré');
+    try { showToast('✅ Deepgram actif'); } catch(e) {}
     return;
   } catch (e) {
     console.warn('[CLOUD-STT] Deepgram failed → fallback Whisper:', e.message || e);
+    try { showToast('⚠️ Deepgram fail (' + (e.message || e).slice(0, 60) + ') → Whisper'); } catch(err) {}
   }
 
   // 2. Fallback : Whisper chunks de 5s (latence 5-8s)
   startWhisperChunks();
   console.log('[CLOUD-STT] Whisper chunks démarrés (fallback)');
+  try { showToast('✅ Whisper actif (chunks 5s)'); } catch(e) {}
 }
 
 async function startDeepgramStream(token) {
@@ -4366,6 +4382,14 @@ function stopMobileCloudSTT() {
     _cloudSTT = null;
   }
   _cloudSTTRetryCount = 0;
+  // Libère la mic stream si on l'a demandée nous-mêmes (mode parent getUserMedia)
+  // pour ne pas garder le micro verrouillé après la fin de l'appel
+  if (_capturedAudioStream) {
+    try {
+      _capturedAudioStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} });
+    } catch(e) {}
+    _capturedAudioStream = null;
+  }
 }
 
 // Fin de réunion — surcharge jitsiHangup
