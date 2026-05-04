@@ -12,6 +12,10 @@
 <title>Konekta — Super App</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://meet.jit.si/external_api.js" defer></script>
+<!-- lib-jitsi-meet (low-level Jitsi API) — utilisée à la place de l'iframe quand
+     window._USE_LIB_JITSI = true. Permet de tap la track audio locale pour Cloud STT
+     car même origine que la PWA (vs iframe cross-origin 8x8.vc) -->
+<script src="https://8x8.vc/libs/lib-jitsi-meet.min.js" async></script>
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -426,6 +430,37 @@
       z-index: 999999 !important;
       box-shadow: 0 -4px 20px rgba(0,0,0,0.5) !important;
     }
+  }
+
+  /* ─── Lib-jitsi-meet v2 layout (remplace l'iframe quand _USE_LIB_JITSI=true) ─── */
+  .konekta-jitsi-v2 {
+    position: relative; width: 100%; height: 100%;
+    background: #000; overflow: hidden;
+  }
+  .kjv2-tiles {
+    width: 100%; height: 100%;
+    display: grid; gap: 4px; background: #000;
+  }
+  .kjv2-tiles.solo { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+  .kjv2-tiles.grid-2 { grid-template-columns: 1fr 1fr; }
+  .kjv2-tiles.grid-multi { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); grid-auto-rows: minmax(140px, 1fr); }
+  .kjv2-tile { position: relative; background: #1a1a1a; border-radius: 8px; overflow: hidden; transition: opacity .2s; }
+  .kjv2-tile-video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+  .kjv2-tile-audio { display: none; }
+  .kjv2-tile-name {
+    position: absolute; bottom: 6px; left: 6px;
+    background: rgba(0,0,0,.55); color: #fff;
+    padding: 2px 8px; font-size: 12px; border-radius: 4px;
+  }
+  .kjv2-self {
+    position: absolute; bottom: 80px; right: 16px;
+    width: 110px; height: 150px; object-fit: cover;
+    border-radius: 10px; border: 2px solid rgba(255,255,255,.4);
+    background: #222; z-index: 10;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  }
+  @media (max-width: 480px) {
+    .kjv2-self { width: 90px; height: 120px; bottom: 90px; right: 12px; }
   }
 </style>
 </head>
@@ -3030,6 +3065,285 @@ async function startCall(type) {
 }
 
 // --- Lancer Jitsi IFrame dans l'overlay ---
+// ════════════════════════════════════════════════════════════
+//  LIB-JITSI-MEET v2 — appel via API low-level (pas iframe)
+//  Permet de capturer la MediaStreamTrack audio pour Cloud STT
+//  (l'iframe 8x8.vc cross-origin bloquait l'override getUserMedia)
+// ════════════════════════════════════════════════════════════
+// Flag de bascule : passer à true pour activer la nouvelle API.
+// Si false (par défaut), on utilise l'iframe Jitsi historique (zéro régression).
+window._USE_LIB_JITSI = false;
+
+window._konektaLocalAudioTrack = null;
+window._konektaLocalVideoTrack = null;
+window._konektaConnection = null;
+window._konektaRoom = null;
+window._konektaRemoteTracks = {};
+window._konektaCurrentFacing = 'user';
+let _ljmInited = false;
+
+const JAAS_APP_ID_LJM = 'vpaas-magic-cookie-ef45f60a15164dd4a20878febf691844';
+
+function _initJitsiMeetJSOnce() {
+  if (_ljmInited) return;
+  if (typeof JitsiMeetJS === 'undefined') {
+    throw new Error('lib-jitsi-meet non chargé');
+  }
+  JitsiMeetJS.setLogLevel(JitsiMeetJS.logLevels.WARN);
+  JitsiMeetJS.init({
+    disableAudioLevels: false,
+    disableAP: false
+  });
+  _ljmInited = true;
+}
+
+async function _fetchJaasGuestJWT(displayName, roomName) {
+  try {
+    const r = await fetch('/api/jaas-guest-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        room: roomName,
+        name: displayName || (me && (me.name || me.phone)) || 'Konekta User',
+        user_id: (me && me.id) || '',
+        avatar: (me && typeof me.avatar === 'string' && me.avatar.length < 300) ? me.avatar : ''
+      })
+    });
+    if (!r.ok) {
+      console.warn('[JITSI-V2] /api/jaas-guest-token HTTP', r.status, await r.text());
+      return null;
+    }
+    const data = await r.json();
+    return data.token || null;
+  } catch (e) {
+    console.warn('[JITSI-V2] JWT fetch failed:', e.message || e);
+    return null;
+  }
+}
+
+function _ljmConnectionOptions(roomName, jwt) {
+  const wsUrl = 'wss://8x8.vc/' + JAAS_APP_ID_LJM + '/xmpp-websocket?room='
+              + encodeURIComponent(roomName) + (jwt ? '&token=' + encodeURIComponent(jwt) : '');
+  const boshUrl = 'https://8x8.vc/' + JAAS_APP_ID_LJM + '/http-bind?room='
+                + encodeURIComponent(roomName) + (jwt ? '&token=' + encodeURIComponent(jwt) : '');
+  return {
+    hosts: {
+      domain: '8x8.vc',
+      muc: 'conference.' + JAAS_APP_ID_LJM + '.8x8.vc',
+      focus: 'focus.8x8.vc'
+    },
+    serviceUrl: wsUrl,
+    websocket: wsUrl,
+    bosh: boshUrl,
+    clientNode: 'https://jitsi.org/jitsimeet',
+    p2p: { enabled: false },
+    channelLastN: 4,
+    enableLayerSuspension: true,
+    startBitrate: '2500',
+    disableSimulcast: false
+  };
+}
+
+async function startJitsiCallV2(roomName, callType, displayName, container) {
+  _initJitsiMeetJSOnce();
+  container.innerHTML = '';
+  container.classList.add('konekta-jitsi-v2');
+
+  // 1. Local tracks
+  const wantVideo = callType !== 'audio';
+  const trackTypes = wantVideo ? ['audio', 'video'] : ['audio'];
+  let localTracks;
+  try {
+    localTracks = await JitsiMeetJS.createLocalTracks({
+      devices: trackTypes,
+      facingMode: window._konektaCurrentFacing,
+      resolution: 1080,
+      constraints: {
+        audio: {
+          echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+          googEchoCancellation: true, googAutoGainControl: true,
+          googNoiseSuppression: true, googHighpassFilter: true,
+          googTypingNoiseDetection: true
+        },
+        video: wantVideo ? {
+          height: { ideal: 720, max: 1080, min: 360 },
+          width:  { ideal: 1280, max: 1920, min: 640 },
+          frameRate: { ideal: 30, max: 30 }
+        } : undefined
+      }
+    });
+  } catch (err) {
+    console.error('[JITSI-V2] createLocalTracks:', err);
+    try { showToast('❌ Micro/caméra refusés'); } catch(e) {}
+    throw err;
+  }
+
+  for (const t of localTracks) {
+    if (t.getType() === 'audio') window._konektaLocalAudioTrack = t;
+    else if (t.getType() === 'video') window._konektaLocalVideoTrack = t;
+  }
+
+  // 2. Self-view PiP
+  const tilesEl = document.createElement('div');
+  tilesEl.className = 'kjv2-tiles';
+  container.appendChild(tilesEl);
+  if (wantVideo && window._konektaLocalVideoTrack) {
+    const selfEl = document.createElement('video');
+    selfEl.className = 'kjv2-self';
+    selfEl.autoplay = true; selfEl.muted = true; selfEl.playsInline = true;
+    container.appendChild(selfEl);
+    window._konektaLocalVideoTrack.attach(selfEl);
+  }
+
+  // 3. JWT + connection
+  const jwt = await _fetchJaasGuestJWT(displayName, roomName);
+  if (!jwt) { try { showToast('⚠️ JWT JaaS indisponible — rejoindre échouera'); } catch(e) {} }
+  const options = _ljmConnectionOptions(roomName, jwt);
+  const connection = new JitsiMeetJS.JitsiConnection(null, jwt, options);
+  window._konektaConnection = connection;
+
+  await new Promise((resolve, reject) => {
+    const onOK = () => { connection.removeEventListener(JitsiMeetJS.events.connection.CONNECTION_ESTABLISHED, onOK); resolve(); };
+    const onKO = (e) => { connection.removeEventListener(JitsiMeetJS.events.connection.CONNECTION_FAILED, onKO); reject(e); };
+    connection.addEventListener(JitsiMeetJS.events.connection.CONNECTION_ESTABLISHED, onOK);
+    connection.addEventListener(JitsiMeetJS.events.connection.CONNECTION_FAILED, onKO);
+    connection.connect();
+  });
+
+  // 4. Conference
+  const fullRoom = (JAAS_APP_ID_LJM + '/' + roomName).toLowerCase();
+  const conference = connection.initJitsiConference(fullRoom, {
+    openBridgeChannel: true,
+    p2p: { enabled: false },
+    enableLayerSuspension: true,
+    channelLastN: 4
+  });
+  window._konektaRoom = conference;
+
+  conference.on(JitsiMeetJS.events.conference.TRACK_ADDED, (track) => {
+    if (track.isLocal()) return;
+    const pid = track.getParticipantId();
+    (window._konektaRemoteTracks[pid] = window._konektaRemoteTracks[pid] || []).push(track);
+    _kjv2RenderTiles();
+  });
+  conference.on(JitsiMeetJS.events.conference.TRACK_REMOVED, (track) => {
+    if (track.isLocal()) return;
+    const pid = track.getParticipantId();
+    if (window._konektaRemoteTracks[pid]) {
+      window._konektaRemoteTracks[pid] = window._konektaRemoteTracks[pid].filter(t => t !== track);
+      if (!window._konektaRemoteTracks[pid].length) delete window._konektaRemoteTracks[pid];
+    }
+    _kjv2RenderTiles();
+  });
+  conference.on(JitsiMeetJS.events.conference.USER_JOINED, () => _kjv2RenderTiles());
+  conference.on(JitsiMeetJS.events.conference.USER_LEFT, (id) => { delete window._konektaRemoteTracks[id]; _kjv2RenderTiles(); });
+  conference.on(JitsiMeetJS.events.conference.CONFERENCE_JOINED, () => {
+    window._jitsiJoined = true;
+    if (typeof window.onKonektaJitsiReady === 'function') {
+      try { window.onKonektaJitsiReady(); } catch(e) {}
+    }
+  });
+  conference.on(JitsiMeetJS.events.conference.CONFERENCE_FAILED, (err) => {
+    console.error('[JITSI-V2] CONFERENCE_FAILED', err);
+    try { showToast('❌ Erreur conférence : ' + err); } catch(e) {}
+  });
+
+  conference.setDisplayName(displayName || 'Konekta User');
+  for (const t of localTracks) {
+    try { await conference.addTrack(t); } catch(e) { console.warn('addTrack', e); }
+  }
+  conference.join();
+
+  // API publique mappée sur l'ancien _jitsiApi pour compat avec le code existant (timer, hangup, etc.)
+  window._jitsiApi = {
+    executeCommand: (cmd) => {
+      if (cmd === 'hangup') return _kjv2Hangup();
+      if (cmd === 'toggleAudio') {
+        const t = window._konektaLocalAudioTrack;
+        if (t) { t.isMuted() ? t.unmute() : t.mute(); }
+      }
+      if (cmd === 'toggleVideo') {
+        const t = window._konektaLocalVideoTrack;
+        if (t) { t.isMuted() ? t.unmute() : t.mute(); }
+      }
+    },
+    dispose: () => _kjv2Hangup(),
+    addListener: () => {}
+  };
+}
+
+function _kjv2RenderTiles() {
+  const container = document.getElementById('jitsi-container');
+  const tilesEl = container && container.querySelector('.kjv2-tiles');
+  if (!tilesEl) return;
+  const pids = Object.keys(window._konektaRemoteTracks || {});
+  Array.from(tilesEl.children).forEach(child => {
+    if (!pids.includes(child.getAttribute('data-pid'))) child.remove();
+  });
+  pids.forEach(pid => {
+    let tile = tilesEl.querySelector('[data-pid="' + pid + '"]');
+    if (!tile) {
+      tile = document.createElement('div');
+      tile.className = 'kjv2-tile';
+      tile.setAttribute('data-pid', pid);
+      const v = document.createElement('video');
+      v.autoplay = true; v.playsInline = true; v.className = 'kjv2-tile-video';
+      const a = document.createElement('audio');
+      a.autoplay = true; a.className = 'kjv2-tile-audio';
+      const lbl = document.createElement('div');
+      lbl.className = 'kjv2-tile-name';
+      const room = window._konektaRoom;
+      const part = room && room.getParticipantById ? room.getParticipantById(pid) : null;
+      lbl.textContent = (part && part.getDisplayName && part.getDisplayName()) || pid.slice(0, 6);
+      tile.appendChild(v); tile.appendChild(a); tile.appendChild(lbl);
+      tilesEl.appendChild(tile);
+    }
+    const tracks = window._konektaRemoteTracks[pid] || [];
+    tracks.forEach(t => {
+      try {
+        if (t.getType() === 'video') t.attach(tile.querySelector('video'));
+        else if (t.getType() === 'audio') t.attach(tile.querySelector('audio'));
+      } catch(e) {}
+    });
+  });
+  const n = pids.length;
+  tilesEl.classList.toggle('solo', n <= 1);
+  tilesEl.classList.toggle('grid-2', n === 2);
+  tilesEl.classList.toggle('grid-multi', n > 2);
+}
+
+async function _kjv2Hangup() {
+  try {
+    for (const t of [window._konektaLocalAudioTrack, window._konektaLocalVideoTrack]) {
+      if (t) { try { t.dispose(); } catch(e) {} }
+    }
+    if (window._konektaRoom) { try { await window._konektaRoom.leave(); } catch(e) {} }
+    if (window._konektaConnection) { try { window._konektaConnection.disconnect(); } catch(e) {} }
+  } finally {
+    window._konektaLocalAudioTrack = null;
+    window._konektaLocalVideoTrack = null;
+    window._konektaRoom = null;
+    window._konektaConnection = null;
+    window._konektaRemoteTracks = {};
+  }
+}
+
+// Hook : injecter la track audio capturée par lib-jitsi-meet vers Cloud STT
+window.onKonektaJitsiReady = function() {
+  try {
+    const ljmTrack = window._konektaLocalAudioTrack;
+    if (!ljmTrack) return;
+    const native = ljmTrack.getTrack && ljmTrack.getTrack();
+    if (!native) return;
+    const stream = new MediaStream([native.clone()]);
+    if (window._capturedAudioStream && window._capturedAudioStream !== stream) {
+      try { window._capturedAudioStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} }); } catch(e) {}
+    }
+    window._capturedAudioStream = stream;
+    console.log('[JITSI-V2] _capturedAudioStream injecté pour Cloud STT');
+  } catch (e) { console.warn('[JITSI-V2] onKonektaJitsiReady', e); }
+};
+
 function launchJitsiEmbed(roomName, callType, displayName) {
   const isGroupRoom = roomName && roomName.includes('konekta-grp');
   const overlay = document.getElementById('call-overlay');
@@ -3040,6 +3354,28 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   _callSeconds = 0;
   const timerBar = document.getElementById('call-timer-bar');
   if (timerBar) timerBar.textContent = '00:00';
+
+  // ── Bascule vers lib-jitsi-meet si activée ──
+  if (window._USE_LIB_JITSI && typeof JitsiMeetJS !== 'undefined') {
+    setupSpeakerToggle();
+    startJitsiCallV2(roomName, callType, displayName, container).catch(err => {
+      console.error('[JITSI-V2] failed, fallback iframe:', err);
+      try { showToast('⚠️ lib-jitsi-meet a échoué, retour iframe'); } catch(e) {}
+      // Ne rappelle pas launchJitsiEmbed (boucle), continue avec l'iframe en désactivant le flag
+      window._USE_LIB_JITSI = false;
+      launchJitsiEmbed(roomName, callType, displayName);
+    });
+    // Démarrer le timer (côté UI)
+    _callTimer = setInterval(() => {
+      _callSeconds++;
+      const m = Math.floor(_callSeconds / 60);
+      const s = _callSeconds % 60;
+      const tb = document.getElementById('call-timer-bar');
+      if (tb) tb.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+    return;
+  }
+
   // Afficher le bouton Notes pour les groupes + auto-créer session si manquante
   const notesToggle = document.getElementById('meeting-notes-toggle');
   const isCoCo = (_currentGroupId && currentChat?.groupType === 'coconstruction') || isGroupRoom;
