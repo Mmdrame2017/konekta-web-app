@@ -3070,9 +3070,27 @@ async function startCall(type) {
 //  Permet de capturer la MediaStreamTrack audio pour Cloud STT
 //  (l'iframe 8x8.vc cross-origin bloquait l'override getUserMedia)
 // ════════════════════════════════════════════════════════════
-// Flag de bascule : passer à true pour activer la nouvelle API.
-// Si false (par défaut), on utilise l'iframe Jitsi historique (zéro régression).
-window._USE_LIB_JITSI = false;
+// Flag de bascule : true pour activer lib-jitsi-meet (vs iframe).
+// Activable via :
+//  - URL : https://konekta-web-app.vercel.app/?libjitsi=1
+//  - Console : window._USE_LIB_JITSI = true (avant de démarrer un appel)
+//  - localStorage : localStorage.setItem('knk_use_lib_jitsi', '1')
+(function() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('libjitsi') === '1') {
+      window._USE_LIB_JITSI = true;
+      try { localStorage.setItem('knk_use_lib_jitsi', '1'); } catch(e) {}
+    } else if (params.get('libjitsi') === '0') {
+      window._USE_LIB_JITSI = false;
+      try { localStorage.removeItem('knk_use_lib_jitsi'); } catch(e) {}
+    } else if (localStorage.getItem('knk_use_lib_jitsi') === '1') {
+      window._USE_LIB_JITSI = true;
+    } else {
+      window._USE_LIB_JITSI = false;
+    }
+  } catch(e) { window._USE_LIB_JITSI = false; }
+})();
 
 window._konektaLocalAudioTrack = null;
 window._konektaLocalVideoTrack = null;
@@ -3145,6 +3163,7 @@ function _ljmConnectionOptions(roomName, jwt) {
 }
 
 async function startJitsiCallV2(roomName, callType, displayName, container) {
+  try { showToast('🔧 [V2] Init lib-jitsi-meet…'); } catch(e) {}
   _initJitsiMeetJSOnce();
   container.innerHTML = '';
   container.classList.add('konekta-jitsi-v2');
@@ -3154,6 +3173,7 @@ async function startJitsiCallV2(roomName, callType, displayName, container) {
   const trackTypes = wantVideo ? ['audio', 'video'] : ['audio'];
   let localTracks;
   try {
+    try { showToast('🎙️ [V2] Capture micro/caméra…'); } catch(e) {}
     localTracks = await JitsiMeetJS.createLocalTracks({
       devices: trackTypes,
       facingMode: window._konektaCurrentFacing,
@@ -3172,9 +3192,10 @@ async function startJitsiCallV2(roomName, callType, displayName, container) {
         } : undefined
       }
     });
+    try { showToast('✅ [V2] Tracks ' + localTracks.map(t => t.getType()).join('+')); } catch(e) {}
   } catch (err) {
     console.error('[JITSI-V2] createLocalTracks:', err);
-    try { showToast('❌ Micro/caméra refusés'); } catch(e) {}
+    try { showToast('❌ [V2] Micro/cam : ' + (err.name || err.message || 'refused')); } catch(e) {}
     throw err;
   }
 
@@ -3196,12 +3217,18 @@ async function startJitsiCallV2(roomName, callType, displayName, container) {
   }
 
   // 3. JWT + connection
+  try { showToast('🔑 [V2] Récupération JWT JaaS…'); } catch(e) {}
   const jwt = await _fetchJaasGuestJWT(displayName, roomName);
-  if (!jwt) { try { showToast('⚠️ JWT JaaS indisponible — rejoindre échouera'); } catch(e) {} }
+  if (!jwt) {
+    try { showToast('⚠️ [V2] JWT manquant — la connexion va échouer'); } catch(e) {}
+  } else {
+    try { showToast('✅ [V2] JWT OK (' + jwt.length + ' chars)'); } catch(e) {}
+  }
   const options = _ljmConnectionOptions(roomName, jwt);
   const connection = new JitsiMeetJS.JitsiConnection(null, jwt, options);
   window._konektaConnection = connection;
 
+  try { showToast('🌐 [V2] Connexion XMPP 8x8…'); } catch(e) {}
   await new Promise((resolve, reject) => {
     const onOK = () => { connection.removeEventListener(JitsiMeetJS.events.connection.CONNECTION_ESTABLISHED, onOK); resolve(); };
     const onKO = (e) => { connection.removeEventListener(JitsiMeetJS.events.connection.CONNECTION_FAILED, onKO); reject(e); };
@@ -3209,6 +3236,7 @@ async function startJitsiCallV2(roomName, callType, displayName, container) {
     connection.addEventListener(JitsiMeetJS.events.connection.CONNECTION_FAILED, onKO);
     connection.connect();
   });
+  try { showToast('✅ [V2] XMPP connecté'); } catch(e) {}
 
   // 4. Conference
   const fullRoom = (JAAS_APP_ID_LJM + '/' + roomName).toLowerCase();
@@ -3239,13 +3267,14 @@ async function startJitsiCallV2(roomName, callType, displayName, container) {
   conference.on(JitsiMeetJS.events.conference.USER_LEFT, (id) => { delete window._konektaRemoteTracks[id]; _kjv2RenderTiles(); });
   conference.on(JitsiMeetJS.events.conference.CONFERENCE_JOINED, () => {
     window._jitsiJoined = true;
+    try { showToast('🎉 [V2] Conférence rejointe'); } catch(e) {}
     if (typeof window.onKonektaJitsiReady === 'function') {
       try { window.onKonektaJitsiReady(); } catch(e) {}
     }
   });
   conference.on(JitsiMeetJS.events.conference.CONFERENCE_FAILED, (err) => {
     console.error('[JITSI-V2] CONFERENCE_FAILED', err);
-    try { showToast('❌ Erreur conférence : ' + err); } catch(e) {}
+    try { showToast('❌ [V2] Conf failed : ' + err); } catch(e) {}
   });
 
   conference.setDisplayName(displayName || 'Konekta User');
