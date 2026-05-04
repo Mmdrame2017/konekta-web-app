@@ -981,6 +981,7 @@
         <option value="sw" style="color:#000">🇰🇪 SW</option>
       </select>
       <button id="meeting-tts-toggle" onclick="toggleTranslationTTS()" style="display:none;background:rgba(255,255,255,0.15);color:#fff;border:none;padding:6px 10px;border-radius:16px;font-size:12px;cursor:pointer;font-family:inherit" title="Traduction vocale">🔇</button>
+      <button id="call-speaker-toggle" onclick="toggleSpeakerphone()" style="display:none;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:6px 12px;border-radius:16px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600" title="Basculer haut-parleur / écouteur">🔈 Discret</button>
       <button id="meeting-notes-toggle" onclick="toggleMeetingNotes()" style="display:none;background:#00A884;color:#fff;border:none;padding:8px 16px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">📋 Notes</button>
     </div>
   </div>
@@ -1747,6 +1748,66 @@ async function setupCapacitorNative() {
     console.log('[CAP] Native call notifications ready');
   } catch(e) {
     console.warn('[CAP] setup failed', e);
+  }
+}
+
+// ─── Speakerphone toggle (uniquement app Capacitor Android v1.2+) ───
+let _speakerphoneOn = false;
+
+function _isCapacitorNative() {
+  return typeof window !== 'undefined'
+      && window.Capacitor
+      && typeof window.Capacitor.isNativePlatform === 'function'
+      && window.Capacitor.isNativePlatform();
+}
+
+function setupSpeakerToggle() {
+  const btn = document.getElementById('call-speaker-toggle');
+  if (!btn) return;
+  if (!_isCapacitorNative() || !window.Capacitor.Plugins || !window.Capacitor.Plugins.AudioRoute) {
+    // Mode navigateur ou plugin non dispo : on cache le bouton
+    btn.style.display = 'none';
+    return;
+  }
+  // Activer le mode communication audio dès le début de l'appel
+  try { window.Capacitor.Plugins.AudioRoute.startCallMode(); } catch(e) {}
+  _speakerphoneOn = false;
+  _renderSpeakerButton();
+  btn.style.display = 'inline-block';
+}
+
+function _renderSpeakerButton() {
+  const btn = document.getElementById('call-speaker-toggle');
+  if (!btn) return;
+  if (_speakerphoneOn) {
+    btn.textContent = '🔊 Main-libre';
+    btn.style.background = '#00A884';
+    btn.style.borderColor = '#00A884';
+  } else {
+    btn.textContent = '🔈 Discret';
+    btn.style.background = 'rgba(255,255,255,0.15)';
+    btn.style.borderColor = 'rgba(255,255,255,0.3)';
+  }
+}
+
+async function toggleSpeakerphone() {
+  if (!_isCapacitorNative() || !window.Capacitor.Plugins || !window.Capacitor.Plugins.AudioRoute) return;
+  try {
+    const next = !_speakerphoneOn;
+    const r = await window.Capacitor.Plugins.AudioRoute.setSpeakerphoneOn({ enabled: next });
+    _speakerphoneOn = !!(r && r.speakerphoneOn);
+    _renderSpeakerButton();
+  } catch(e) {
+    console.warn('[AUDIO] toggleSpeakerphone failed', e);
+  }
+}
+
+function teardownSpeakerToggle() {
+  const btn = document.getElementById('call-speaker-toggle');
+  if (btn) btn.style.display = 'none';
+  _speakerphoneOn = false;
+  if (_isCapacitorNative() && window.Capacitor.Plugins && window.Capacitor.Plugins.AudioRoute) {
+    try { window.Capacitor.Plugins.AudioRoute.endCallMode(); } catch(e) {}
   }
 }
 
@@ -2988,6 +3049,8 @@ function launchJitsiEmbed(roomName, callType, displayName) {
   }
   const callTopbar = document.getElementById('call-topbar');
   if (callTopbar) callTopbar.style.display = 'flex';
+  // Affiche le bouton speaker uniquement dans l'app Capacitor Android (plugin natif requis)
+  setupSpeakerToggle();
   if (isCoCo && !_currentMeetingSession) {
     _meetingStartTime = Date.now();
     // Chercher une session active existante avant d'en créer une nouvelle
@@ -3115,6 +3178,7 @@ function launchJitsiEmbed(roomName, callType, displayName) {
 // --- Raccrocher (Jitsi) ---
 function jitsiHangup() {
   stopRingtone();
+  teardownSpeakerToggle();
   clearInterval(_callTimer); _callTimer = null;
   if (_callStatusPoll) { clearInterval(_callStatusPoll); _callStatusPoll = null; }
   if (_currentMeetingSession && window._jitsiJoined) endMeeting();
