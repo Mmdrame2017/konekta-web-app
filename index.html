@@ -3070,26 +3070,25 @@ async function startCall(type) {
 //  Permet de capturer la MediaStreamTrack audio pour Cloud STT
 //  (l'iframe 8x8.vc cross-origin bloquait l'override getUserMedia)
 // ════════════════════════════════════════════════════════════
-// Flag de bascule : true pour activer lib-jitsi-meet (vs iframe).
-// Activable via :
-//  - URL : https://konekta-web-app.vercel.app/?libjitsi=1
-//  - Console : window._USE_LIB_JITSI = true (avant de démarrer un appel)
-//  - localStorage : localStorage.setItem('knk_use_lib_jitsi', '1')
+// lib-jitsi-meet activé par DÉFAUT (validé sur desktop, audio + transcription + traduction OK).
+// Override possible via URL :
+//  - ?libjitsi=0 → revenir à l'iframe (rollback rapide en cas de bug mobile)
+//  - ?libjitsi=1 → forcer lib-jitsi-meet (no-op puisque c'est le défaut)
 (function() {
   try {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('libjitsi') === '1') {
-      window._USE_LIB_JITSI = true;
-      try { localStorage.setItem('knk_use_lib_jitsi', '1'); } catch(e) {}
-    } else if (params.get('libjitsi') === '0') {
+    if (params.get('libjitsi') === '0') {
       window._USE_LIB_JITSI = false;
+      try { localStorage.setItem('knk_use_lib_jitsi', '0'); } catch(e) {}
+    } else if (params.get('libjitsi') === '1') {
+      window._USE_LIB_JITSI = true;
       try { localStorage.removeItem('knk_use_lib_jitsi'); } catch(e) {}
-    } else if (localStorage.getItem('knk_use_lib_jitsi') === '1') {
-      window._USE_LIB_JITSI = true;
-    } else {
+    } else if (localStorage.getItem('knk_use_lib_jitsi') === '0') {
       window._USE_LIB_JITSI = false;
+    } else {
+      window._USE_LIB_JITSI = true;  // défaut activé
     }
-  } catch(e) { window._USE_LIB_JITSI = false; }
+  } catch(e) { window._USE_LIB_JITSI = true; }
 })();
 
 window._konektaLocalAudioTrack = null;
